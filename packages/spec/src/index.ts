@@ -1,53 +1,43 @@
 /**
  * @waypoint/spec — the Waypoint review convention (SPEC v1).
  *
- * Phase 1 scaffold only: this file exports the spec version and placeholder
- * types so the app and CLI can wire against a stable module. The real parser,
- * splice writer, and golden fixtures land in Phase 2.
+ * Public surface: a deterministic parser and a byte-faithful splice writer for
+ * the markdown review convention documented in `docs/SPEC.md`. See §5 (the
+ * convention), §11 (export/round-trip), and §17 (invariants).
  */
 
-/** Semver of the review convention. `docs/SPEC.md` is the public contract (§4). */
-export const SPEC_VERSION = "1.0.0";
+export { SPEC_VERSION, SPEC_MARKER } from "./types.js";
+export type {
+  Span,
+  Frontmatter,
+  ItemType,
+  ChoiceSelect,
+  ResponseStatus,
+  ChoiceOption,
+  ItemSpans,
+  ItemResponse,
+  Item,
+  CommentAnchor,
+  CommentSpans,
+  Comment,
+  WarningCode,
+  Warning,
+  SpanIndex,
+  ParseResult,
+  ResponseValue,
+  ReviewComment,
+  ReviewState,
+} from "./types.js";
 
-/** Frontmatter opt-in marker value (`waypoint: 1` in §5.1). */
-export const SPEC_MARKER = 1;
+export {
+  parseDocument,
+  extractReviewState,
+  reviewIsEmpty,
+  responseIsEmpty,
+} from "./parse.js";
 
-/** Document frontmatter (§5.1). */
-export interface Frontmatter {
-  waypoint?: number;
-  title?: string;
-  project?: string;
-  source?: string;
-  [key: string]: unknown;
-}
+export { applyReview } from "./apply.js";
 
-/** Question kind (§5.2 / §5.3). */
-export type ItemType = "text" | "choice";
-
-/** Selection cardinality for choice questions (§5.3). */
-export type ChoiceSelect = "single" | "multi";
-
-/** Per-item response status (§5.5). Absent = untouched. */
-export type ResponseStatus = "answered" | "flagged" | "skipped";
-
-/**
- * Placeholder shapes — intentionally minimal in Phase 1. Phase 2 replaces these
- * with the full definitions (spans, anchors, warnings, etc.) from types.ts.
- */
-export interface Item {
-  wpId: string;
-  type: ItemType;
-}
-
-export interface Comment {
-  id: string;
-}
-
-export interface Warning {
-  message: string;
-}
-
-export interface ReviewState {
-  responses?: Record<string, unknown>;
-  comments?: Comment[];
-}
+// HTML-attribute helpers are part of the convention's contract (§5.4) and are
+// reused by the UI when constructing comment anchors.
+export { encodeAttr, decodeAttr } from "./html.js";

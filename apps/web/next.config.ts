@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // @waypoint/spec is ESM TypeScript consumed from source (§4). Its relative
+  // imports carry `.js` extensions that resolve to `.ts` files (matching
+  // tsconfig `moduleResolution: Bundler`); teach webpack the same mapping.
+  webpack: (config) => {
+    config.resolve.extensionAlias = {
+      ".js": [".ts", ".tsx", ".js"],
+      ".mjs": [".mts", ".mjs"],
+    };
+    return config;
+  },
 };
 
 export default nextConfig;
