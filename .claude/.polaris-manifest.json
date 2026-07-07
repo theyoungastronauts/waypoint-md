@@ -1,0 +1,6 @@
+{
+  "installed_at": "2026-07-07T17:55:30Z",
+  "layout": "monorepo",
+  "stacks": {"nextjs": "web"},
+  "files": ["skills/nextjs-patterns/SKILL.md", "skills/cross-repo-context/SKILL.md", "skills/verify-nextjs/SKILL.md", "skills/react/SKILL.md", "skills/tailwind/SKILL.md", "skills/nextjs-bootstrap/SKILL.md", "skills/visual-feedback/SKILL.md", "agents/executor.md", "context/ROUTER.md", "context/decisions.md", "context/conventions.md", "context/patterns/README.md"]
+}
