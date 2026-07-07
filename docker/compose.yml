@@ -1,0 +1,23 @@
+name: waypoint
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # §16 env var table. Container always listens on 3000; the host port maps it.
+      PORT: "3000"
+      WAYPOINT_DATA_DIR: /data
+      WAYPOINT_TOKEN: "${WAYPOINT_TOKEN:-}"
+      WAYPOINT_ALLOWED_ROOTS: "${WAYPOINT_ALLOWED_ROOTS:-}"
+      WAYPOINT_PUBLIC_URL: "${WAYPOINT_PUBLIC_URL:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      WAYPOINT_MODEL: "${WAYPOINT_MODEL:-claude-sonnet-5}"
+    volumes:
+      - waypoint-data:/data
+
+volumes:
+  waypoint-data:

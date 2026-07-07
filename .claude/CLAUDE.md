@@ -7,13 +7,23 @@ Polaris skills are installed under `.claude/skills/` and discovered automaticall
 
 ### Project Structure
 
+pnpm workspace monorepo (no Turborepo — three packages). Node 22 is pinned via
+`.nvmrc` / `engines`; the local dev shell runs Node 20.x, which is compatible —
+do not rely on `nvm use`. Root scripts recurse over the workspace: `pnpm typecheck`,
+`pnpm lint`, `pnpm build` (all `pnpm -r ...`) and `pnpm test` (vitest at root).
+
 #### Frontend: Next.js
 
-- **Location**: `web/`
-- **Stack**: TypeScript, Next.js (App Router), React, Tailwind CSS + DaisyUI
+- **Location**: `apps/web/`
+- **Stack**: TypeScript 5, Next.js 15 (App Router), React 19, Tailwind CSS v4 + shadcn/ui (dark theme default, light available), Drizzle ORM + better-sqlite3 (WAL). API routes under `apps/web/app/api/`.
 - **Key patterns**: the `nextjs-patterns` skill (auto-loads; installed at `.claude/skills/nextjs-patterns/SKILL.md`)
 - **API consumption**: Check integration summaries in `docs/integration/` for endpoint contracts
 - **On-demand references**: Use `/react` for React best practices, `/tailwind` for Tailwind v4 patterns
+
+#### Packages
+
+- `packages/spec/` — `@waypoint/spec`: the review-convention parser, splice writer, types, and golden fixtures. The byte-fidelity and round-trip invariants live here.
+- `packages/cli/` — the `waypoint` CLI (published to npm as `waypoint-md`): commander, zero heavy deps.
 
 ### Agents
 

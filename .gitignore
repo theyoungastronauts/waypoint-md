@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+.next/
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# next (auto-generated)
+next-env.d.ts
+
+# testing / coverage
+coverage/
+test-results/
+playwright-report/
+.playwright/
+
+# env & secrets (repo-root .env holds ANTHROPIC_API_KEY — ignored from day one)
+.env
+.env.*
+!.env.example
+
+# waypoint runtime data & CLI pointer dir
+.waypoint
+*.db
+*.db-shm
+*.db-wal
+/data/
+
+# OS junk
+.DS_Store
+Thumbs.db
