@@ -30,9 +30,17 @@ export default function RootLayout({
                 <Link href="/" className="font-semibold tracking-tight">
                   Waypoint
                 </Link>
-                <span className="text-sm text-muted-foreground">
+                <span className="hidden text-sm text-muted-foreground sm:inline">
                   review agent-generated markdown
                 </span>
+                <nav className="ml-auto flex items-center gap-4 text-sm">
+                  <Link href="/" className="text-muted-foreground hover:text-foreground">
+                    Queue
+                  </Link>
+                  <Link href="/new" className="text-muted-foreground hover:text-foreground">
+                    New
+                  </Link>
+                </nav>
               </div>
             </header>
             <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
