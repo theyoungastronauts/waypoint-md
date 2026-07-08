@@ -7,7 +7,7 @@ import type {
   ItemType,
   ResponseValue,
 } from "@waypoint/spec";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "./db/client";
 import { comments, documents, items, projects, responses } from "./db/schema";
 
@@ -264,10 +264,13 @@ export function getDocumentDetail(id: string): DocumentDetail | null {
     .orderBy(items.orderIndex)
     .all();
 
-  const responseRows = db
-    .select()
-    .from(responses)
-    .all();
+  // Scope the responses query to this document's items — never load the whole
+  // responses table (it grows with every reviewer answer across all docs).
+  const itemIds = itemRows.map((it) => it.id);
+  const responseRows =
+    itemIds.length > 0
+      ? db.select().from(responses).where(inArray(responses.itemId, itemIds)).all()
+      : [];
   const responseByItem = new Map(responseRows.map((r) => [r.itemId, r]));
 
   const commentRows = db

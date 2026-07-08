@@ -34,7 +34,12 @@ export const documents = sqliteTable("documents", {
   sourceUrl: text("source_url"),
   pushedFromHost: text("pushed_from_host"),
   specVersion: text("spec_version"),
-  /** pending | in_review | completed | pulled */
+  /**
+   * pending | in_review | completed | pulled | archived.
+   * `archived` is set only by supersede automation (a newer push archives the
+   * prior doc); it is never a direct reviewer/API transition (see the PATCH
+   * route, which rejects it).
+   */
   status: text("status").notNull().default("pending"),
   supersedesId: text("supersedes_id"),
   createdAt: createdAt(),

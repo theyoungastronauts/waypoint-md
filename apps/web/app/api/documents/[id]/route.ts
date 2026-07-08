@@ -31,7 +31,14 @@ export async function GET(_req: Request, ctx: RouteContext): Promise<NextRespons
 
 const patchSchema = z
   .object({
-    status: z.enum(DOCUMENT_STATUSES).optional(),
+    // `archived` is supersede-automation only — a reviewer/API caller may never
+    // set it directly (§6). Accept the rest of the vocabulary.
+    status: z
+      .enum(DOCUMENT_STATUSES)
+      .refine((s) => s !== "archived", {
+        message: "`archived` is set only when a newer push supersedes a document.",
+      })
+      .optional(),
     projectId: z.string().trim().min(1).nullable().optional(),
     project: z.string().trim().min(1).optional(),
   })

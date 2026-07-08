@@ -181,6 +181,21 @@ describe("GET/PATCH /api/documents/:id", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("rejects setting status to archived directly (supersede-automation only)", async () => {
+    const create = await postDocument(jsonRequest({ markdown: "# A\n\nb" }));
+    const { id } = await create.json();
+    const res = await patchDocument(
+      new Request("http://localhost/x", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(400);
+    expect(getDocumentDetail(id)!.status).toBe("pending");
+  });
 });
 
 describe("supersede semantics (§6)", () => {

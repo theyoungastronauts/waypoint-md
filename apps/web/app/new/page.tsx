@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "New document" };
 export default function NewDocumentPage() {
   const projects = listProjects();
   return (
-    <section className="space-y-6">
+    <section className="mx-auto w-full max-w-3xl space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Import a document</h1>
         <p className="text-sm text-muted-foreground">

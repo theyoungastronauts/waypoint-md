@@ -34,7 +34,7 @@ export default async function QueuePage({ searchParams }: QueuePageProps) {
     : SECTION_ORDER.filter((s) => (grouped.get(s)?.length ?? 0) > 0);
 
   return (
-    <section className="space-y-6">
+    <section className="mx-auto w-full max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Queue</h1>
