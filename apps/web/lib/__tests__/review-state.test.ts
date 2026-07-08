@@ -10,6 +10,7 @@ function item(partial: Partial<ItemDetail>): ItemDetail {
     config: null,
     promptMd: "prompt",
     synthetic: false,
+    anchor: null,
     orderIndex: 0,
     response: null,
     ...partial,

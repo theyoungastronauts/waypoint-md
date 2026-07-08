@@ -25,12 +25,15 @@ import type { ReviewItemInit, ReviewSegment } from "./types";
 export function ReviewView({
   docId,
   segments,
+  syntheticInits = [],
   comments,
   aiEnabled,
   initialChat,
 }: {
   docId: string;
   segments: ReviewSegment[];
+  /** Synthetic (adoptive-import) item cards, rendered in a dedicated section (§5.7). */
+  syntheticInits?: ReviewItemInit[];
   comments: CommentView[];
   /** Server-driven capability flag (§14): whether the AI sidebar renders. */
   aiEnabled: boolean;
@@ -56,6 +59,13 @@ export function ReviewView({
     [segments],
   );
 
+  // Synthetic cards share the same responses store (autosave, focus, progress,
+  // right-rail nav) as in-place items — they are appended to the item order.
+  const allInits = useMemo<ReviewItemInit[]>(
+    () => [...inits, ...syntheticInits],
+    [inits, syntheticInits],
+  );
+
   const proseSources = useMemo<ProseSource[]>(
     () =>
       segments
@@ -73,7 +83,7 @@ export function ReviewView({
 
   return (
     <CommentsProvider docId={docId} initialComments={comments} proseSources={proseSources}>
-      <ResponsesProvider inits={inits}>
+      <ResponsesProvider inits={allInits}>
         <FocusProvider>
           <AgentProvider docId={docId} enabled={aiEnabled} initialMessages={initialChat}>
           {completed && (
@@ -99,6 +109,8 @@ export function ReviewView({
                 return <ItemCard key={segment.itemId} init={segment} index={itemOrdinal} />;
               })}
 
+              <SyntheticSection inits={syntheticInits} startIndex={inits.length} />
+
               <UnanchoredComments />
             </article>
 
@@ -121,5 +133,30 @@ export function ReviewView({
         </FocusProvider>
       </ResponsesProvider>
     </CommentsProvider>
+  );
+}
+
+/**
+ * Synthetic (adoptive-import) items in a dedicated section below the prose (§5.7).
+ * In-place insertion would mean splitting rendered prose at an arbitrary byte
+ * offset — disproportionate and fragile — so they collect here in document order
+ * (by anchor offset), each card showing the source quote it refers to. They
+ * answer and autosave exactly like in-place cards. Renders nothing when empty.
+ */
+function SyntheticSection({ inits, startIndex }: { inits: ReviewItemInit[]; startIndex: number }) {
+  if (inits.length === 0) return null;
+  return (
+    <section className="mt-10 border-t border-border pt-6">
+      <div className="mb-1">
+        <h2 className="text-lg font-semibold tracking-tight">Structured review</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Questions proposed by adoptive import, each anchored to a quote from this document. Your
+          answers export into a “Waypoint responses” section and never change the source.
+        </p>
+      </div>
+      {inits.map((init, i) => (
+        <ItemCard key={init.itemId} init={init} index={startIndex + i + 1} />
+      ))}
+    </section>
   );
 }

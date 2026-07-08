@@ -38,6 +38,12 @@ export interface ReviewItemInit {
   persisted: PersistedResponse | null;
   /** Parse warnings scoped to this item (e.g. multi-checked single) — §5.3. */
   warnings: Warning[];
+  /**
+   * Present only for synthetic (adoptive-import) items (§5.7): the verbatim
+   * source quote the item was anchored to. Drives the "from the document" context
+   * on the card; absent on ordinary `wp:` items.
+   */
+  synthetic?: { anchorExact: string };
 }
 
 /** A prose run, pre-rendered to sanitized HTML, plus its source slice (§10). */

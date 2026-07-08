@@ -1,6 +1,6 @@
-import type { ResponseStatus, ResponseValue, Warning } from "@waypoint/spec";
-import type { PersistedResponse, ReviewSegment } from "@/components/review/types";
-import type { ItemDetail } from "../documents";
+import type { Item, ItemSpans, ItemType, ResponseStatus, ResponseValue, Warning } from "@waypoint/spec";
+import type { PersistedResponse, ReviewItemInit, ReviewSegment } from "@/components/review/types";
+import type { ItemDetail, SyntheticAnchor } from "../documents";
 import { renderDocument } from "./document";
 import { renderInlineMarkdownToSafeHtml, renderMarkdownToSafeHtml } from "./pipeline";
 
@@ -26,7 +26,10 @@ export interface ReviewRender {
  */
 export function renderReviewDocument(rawMd: string, dbItems: ItemDetail[]): ReviewRender {
   const base = renderDocument(rawMd);
-  const ordered = [...dbItems].sort((a, b) => a.orderIndex - b.orderIndex);
+  // Synthetic items have no `wp:` block in the source (they are DB-only, §5.7),
+  // so they never pair with a rendered segment — exclude them from the in-place
+  // walk. They surface through {@link buildSyntheticInits} in a dedicated section.
+  const ordered = [...dbItems].filter((d) => !d.synthetic).sort((a, b) => a.orderIndex - b.orderIndex);
 
   const segments: ReviewSegment[] = [];
   const carded = new Set<Warning>();
@@ -64,6 +67,54 @@ export function renderReviewDocument(rawMd: string, dbItems: ItemDetail[]): Revi
   const docWarnings = base.warnings.filter((w) => !carded.has(w));
 
   return { segments, docWarnings, isConventioned: base.isConventioned };
+}
+
+/**
+ * Synthetic items live only in the DB (no `wp:` block in `raw_md`), so they have
+ * no real byte spans. The interactive cards never read spans; this placeholder
+ * satisfies the {@link Item} shape the card renderers expect.
+ */
+const SYNTHETIC_SPANS: ItemSpans = {
+  block: { start: 0, end: 0 },
+  questionOpen: { start: 0, end: 0 },
+};
+
+/**
+ * Build interactive-card inits for a document's synthetic (adoptive-import)
+ * items (§5.7). They render as ordinary Question/Choice cards — same autosave
+ * target (`PUT /api/items/:id/response`), same focus/progress model — in a
+ * dedicated "Structured review" section, each carrying the source quote it was
+ * anchored to. Prompt and option markdown are sanitized here, server-side.
+ */
+export function buildSyntheticInits(dbItems: ItemDetail[]): ReviewItemInit[] {
+  return dbItems
+    .filter((db) => db.synthetic)
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((db) => {
+      const type: ItemType = db.type === "choice" ? "choice" : "text";
+      const options = (db.config?.options ?? []).map((o) => ({
+        label: o.label,
+        checked: false,
+        marker: { start: 0, end: 0 },
+      }));
+      const item: Item = {
+        wpId: db.wpId ?? "",
+        type,
+        select: type === "choice" ? db.config?.select ?? "single" : undefined,
+        promptMd: db.promptMd ?? "",
+        options: type === "choice" ? options : undefined,
+        spans: SYNTHETIC_SPANS,
+      };
+      return {
+        itemId: db.id,
+        item,
+        promptHtml: renderMarkdownToSafeHtml(db.promptMd ?? ""),
+        optionLabelsHtml: options.map((o) => renderInlineMarkdownToSafeHtml(o.label)),
+        persisted: toPersisted(db.response ?? null),
+        warnings: [],
+        synthetic: { anchorExact: (db.anchor as SyntheticAnchor | null)?.exact ?? "" },
+      };
+    });
 }
 
 const VALID_STATUSES = new Set<ResponseStatus>(["answered", "flagged", "skipped"]);

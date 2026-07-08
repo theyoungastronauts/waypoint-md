@@ -22,7 +22,7 @@ import type { ReviewItemInit } from "./types";
  * rail and later keyboard nav can scroll to and highlight it.
  */
 export function ItemCard({ init, index }: { init: ReviewItemInit; index: number }) {
-  const { item, itemId, promptHtml, optionLabelsHtml, warnings } = init;
+  const { item, itemId, promptHtml, optionLabelsHtml, warnings, synthetic } = init;
   const { focusedId, setFocused, register } = useFocus();
   const { getSave, statusOf, toggleFlag, toggleSkip } = useResponses();
   const { enabled: aiEnabled, explain } = useAgent();
@@ -52,6 +52,7 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
       <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
         <span className="font-medium uppercase tracking-wide">Question {index}</span>
         {item.wpId && <span className="font-mono">#{item.wpId}</span>}
+        {synthetic && <Badge variant="outline">Structured</Badge>}
         <span className="ml-auto flex items-center gap-2">
           <SavedTick status={draft} />
           <span className="flex items-center gap-1.5">
@@ -65,6 +66,15 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
           </Badge>
         </span>
       </div>
+
+      {synthetic?.anchorExact && (
+        <blockquote className="mb-3 border-l-2 border-border pl-3 text-sm text-muted-foreground">
+          <span className="mb-0.5 block text-xs font-medium uppercase tracking-wide">
+            From the document
+          </span>
+          <span className="line-clamp-3 italic">{synthetic.anchorExact}</span>
+        </blockquote>
+      )}
 
       <Prose html={promptHtml} />
 
@@ -111,7 +121,9 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
         >
           {skipped ? "Skipped" : "Skip"}
         </button>
-        {aiEnabled && (
+        {aiEnabled && !synthetic && (
+          // Explain scopes chat context to a `wp:` item; synthetic items aren't in
+          // the parsed-source context the chat route builds, so it's hidden there.
           <button
             type="button"
             onClick={() => explain(itemId)}

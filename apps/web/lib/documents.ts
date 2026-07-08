@@ -31,6 +31,24 @@ export interface ItemConfig {
   options?: Array<Pick<ChoiceOption, "label" | "checked">>;
 }
 
+/**
+ * The anchor stored on a synthetic (adoptive-import) item (§5.7, §6). `exact` is
+ * the verbatim source quote the item was validated against; `start` is that
+ * quote's byte offset in `raw_md`, used to order and place the cards.
+ */
+export interface SyntheticAnchor {
+  exact: string;
+  start: number;
+}
+
+/** One synthetic item ready to persist (§5.7). */
+export interface CreateSyntheticItem {
+  type: ItemType;
+  promptMd: string;
+  config: ItemConfig | null;
+  anchor: SyntheticAnchor;
+}
+
 /** One item ready to persist, derived from a parsed {@link SpecItem}. */
 export interface PersistItem {
   wpId: string | null;
@@ -167,6 +185,49 @@ export function createDocument(input: CreateDocumentInput): string {
   });
 }
 
+/**
+ * Persist accepted adoptive-import proposals as synthetic items (§5.7). They
+ * carry `synthetic = true`, a null `wp_id`, and their validated `anchor`; they
+ * have **no span refs** because they do not exist in `raw_md` (which stays
+ * immutable — no spliced blocks). Ordered by anchor offset so the cards read in
+ * document order. Returns the created item ids.
+ */
+export function createSyntheticItems(documentId: string, proposals: CreateSyntheticItem[]): string[] {
+  if (proposals.length === 0) return [];
+  const db = getDb();
+  return db.transaction((tx) => {
+    // Continue numbering after any existing items (defensive; adoptive import
+    // only runs on documents with none).
+    const existing = tx
+      .select({ orderIndex: items.orderIndex })
+      .from(items)
+      .where(eq(items.documentId, documentId))
+      .all();
+    const base = existing.length > 0 ? Math.max(...existing.map((e) => e.orderIndex)) + 1 : 0;
+
+    const ordered = [...proposals].sort((a, b) => a.anchor.start - b.anchor.start);
+    const rows = tx
+      .insert(items)
+      .values(
+        ordered.map((p, i) => ({
+          documentId,
+          wpId: null,
+          type: p.type,
+          config: p.config,
+          promptMd: p.promptMd,
+          synthetic: true,
+          anchor: p.anchor,
+          orderIndex: base + i,
+          spanStart: null,
+          spanEnd: null,
+        })),
+      )
+      .returning({ id: items.id })
+      .all();
+    return rows.map((r) => r.id);
+  });
+}
+
 export interface ListDocumentsFilter {
   status?: string;
   projectId?: string;
@@ -225,6 +286,8 @@ export interface ItemDetail {
   config: ItemConfig | null;
   promptMd: string | null;
   synthetic: boolean;
+  /** The source anchor, only for synthetic items (§5.7). Null otherwise. */
+  anchor: SyntheticAnchor | null;
   orderIndex: number;
   response: { value: ResponseValue | null; status: string | null; updatedAt: string } | null;
 }
@@ -291,6 +354,7 @@ export function getDocumentDetail(id: string): DocumentDetail | null {
         config: it.config as ItemConfig | null,
         promptMd: it.promptMd,
         synthetic: it.synthetic,
+        anchor: (it.anchor as SyntheticAnchor | null) ?? null,
         orderIndex: it.orderIndex,
         response: r
           ? { value: r.value as ResponseValue | null, status: r.status, updatedAt: r.updatedAt }

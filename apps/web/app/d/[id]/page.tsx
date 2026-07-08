@@ -4,12 +4,14 @@ import { notFound } from "next/navigation";
 
 import { WarningsBanner } from "@/components/document/warnings-banner";
 import { ReviewView } from "@/components/review/review-view";
+import { StructureAffordance } from "@/components/review/structure-affordance";
 import { Badge } from "@/components/ui/badge";
 import { aiEnabled } from "@/lib/ai/config";
+import { canOfferStructure } from "@/lib/ai/structure";
 import { listChatMessages } from "@/lib/chat";
 import { getDocumentDetail } from "@/lib/documents";
 import { relativeTime, sourceLabel, statusMeta } from "@/lib/format";
-import { renderReviewDocument } from "@/lib/render/review";
+import { buildSyntheticInits, renderReviewDocument } from "@/lib/render/review";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +39,17 @@ export default async function DocumentPage({ params }: DocPageProps) {
   const initialChat = ai
     ? listChatMessages(doc.id).map((m) => ({ id: m.id, role: m.role, content: m.content }))
     : [];
+
+  // Adoptive import (§5.7): synthetic cards always render (they are just items
+  // once created); the "structure this" affordance only appears on a
+  // convention-less, unstructured document when the AI capability is on.
+  const syntheticInits = buildSyntheticInits(doc.items);
+  const hasConventionItems = doc.items.some((it) => !it.synthetic);
+  const showStructure = canOfferStructure({
+    aiEnabled: ai,
+    hasConventionItems,
+    hasSyntheticItems: syntheticInits.length > 0,
+  });
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4">
@@ -67,9 +80,12 @@ export default async function DocumentPage({ params }: DocPageProps) {
 
       <WarningsBanner warnings={docWarnings} />
 
+      {showStructure && <StructureAffordance docId={doc.id} />}
+
       <ReviewView
         docId={doc.id}
         segments={segments}
+        syntheticInits={syntheticInits}
         aiEnabled={ai}
         initialChat={initialChat}
         comments={doc.comments.map((c) => ({

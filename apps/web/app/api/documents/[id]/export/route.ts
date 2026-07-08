@@ -2,6 +2,7 @@ import { applyReview } from "@waypoint/spec";
 import { toErrorResponse, HttpError } from "@/lib/api/http";
 import { getDocumentDetail } from "@/lib/documents";
 import { buildReviewState, exportFilename } from "@/lib/review-state";
+import { appendSyntheticResponses, buildSyntheticEntries } from "@/lib/synthetic-export";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,12 @@ export async function GET(req: Request, ctx: RouteContext): Promise<Response> {
     // Caller-supplied timestamp keeps applyReview pure; it is only recorded when
     // the review is non-empty (untouched export stays byte-identical).
     const review = buildReviewState(detail, new Date().toISOString());
-    const annotated = applyReview(detail.rawMd, review);
+    // Synthetic items never enter the splice writer (§5.7): their responses are
+    // appended below the (byte-faithful) document body, and only when they exist.
+    const annotated = appendSyntheticResponses(
+      applyReview(detail.rawMd, review),
+      buildSyntheticEntries(detail),
+    );
     const filename = exportFilename(detail);
 
     return new Response(annotated, {

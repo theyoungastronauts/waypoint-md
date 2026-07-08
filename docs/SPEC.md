@@ -226,6 +226,34 @@ phases, listed here for completeness) require no `wp:` markers in the source:
   appended `## Waypoint responses` section rather than spliced blocks, so the
   original document body stays byte-identical.
 
+### Adoptive-import export (`## Waypoint responses`)
+
+Synthetic items have no answer anchor in the source, so `applyReview` never
+touches them. Instead, the annotated export **appends** a section after the
+byte-faithful document body — and only when at least one synthetic item has a
+real answer. A document with no synthetic activity exports exactly what
+`applyReview` produced (an untouched document is byte-identical to its source).
+
+The appended section is:
+
+```markdown
+## Waypoint responses
+
+<!-- Waypoint adoptive-import responses (SPEC v1 §8). The document above is byte-identical to its imported source; these structured items live only here. -->
+
+### 1. <question, first prompt line>
+
+> <verbatim source anchor quote>
+
+<the reviewer's answer>
+```
+
+Each answered synthetic item is one `###` block, numbered in document order (by
+anchor offset). Choice answers render as `**Selected:** a, b` followed by any
+elaboration; a `flagged`/`skipped` status is noted in italics. The body above
+this section is a byte-exact prefix of the export — only a blank line and the
+appended section follow it.
+
 ---
 
 ## Warning codes
