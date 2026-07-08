@@ -17,7 +17,18 @@ const commonFields = {
   title: z.string().trim().min(1).optional(),
 };
 
-const pasteSchema = z.object({ markdown: z.string(), ...commonFields });
+/**
+ * CLI-push source metadata (§7, §12). Its presence promotes a `{markdown}` body
+ * from the paste door to the `cli` door: `source.path` becomes `source_path`
+ * (which drives supersede-on-re-push, §6) and `source.host` is recorded for
+ * round-trip context.
+ */
+const sourceSchema = z.object({
+  path: z.string().trim().min(1).optional(),
+  host: z.string().trim().min(1).optional(),
+});
+
+const pasteSchema = z.object({ markdown: z.string(), source: sourceSchema.optional(), ...commonFields });
 const pathSchema = z.object({ path: z.string().min(1), ...commonFields });
 const urlSchema = z.object({ url: z.string().min(1), ...commonFields });
 
@@ -75,11 +86,16 @@ export async function POST(req: Request): Promise<NextResponse> {
         throw new HttpError(413, "document_too_large", "Document exceeds the 1 MB ingest limit.");
       }
       const projectId = resolveProjectId(input);
+      // A `source.path` means this came from `waypoint push`: it is the CLI door,
+      // and the relative path enables supersede-on-re-push. Absent → paste door.
+      const fromCli = Boolean(input.source?.path);
       return ingestResponse(
         ingestDocument({
           raw: input.markdown,
-          sourceType: "paste",
+          sourceType: fromCli ? "cli" : "paste",
           title: input.title ?? null,
+          sourcePath: input.source?.path ?? null,
+          pushedFromHost: input.source?.host ?? null,
           projectId,
         }),
       );

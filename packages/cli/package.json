@@ -2,11 +2,20 @@
   "name": "waypoint-md",
   "version": "0.1.0",
   "private": true,
+  "//private": "Kept private:true so this run can never publish. Flipping to false is the deliberate manual release step (see docs/RELEASING.md, authored in Phase 10).",
   "description": "Waypoint CLI — push and pull agent-generated markdown reviews to a Waypoint server.",
+  "keywords": ["waypoint", "markdown", "review", "cli", "claude"],
+  "license": "MIT",
   "bin": {
     "waypoint": "./dist/index.js"
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
