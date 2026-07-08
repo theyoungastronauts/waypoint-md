@@ -136,8 +136,21 @@ export async function getDocument(config: ResolvedConfig, id: string): Promise<D
 }
 
 export async function exportAnnotated(config: ResolvedConfig, id: string): Promise<ExportFile> {
+  return exportFormat(config, id, "annotated");
+}
+
+/** Fetch the compact digest export (§11 output 2, SPEC §9) — `pull --digest`. */
+export async function exportDigest(config: ResolvedConfig, id: string): Promise<ExportFile> {
+  return exportFormat(config, id, "digest");
+}
+
+async function exportFormat(
+  config: ResolvedConfig,
+  id: string,
+  format: "annotated" | "digest",
+): Promise<ExportFile> {
   const res = await doFetch(
-    `${config.url}/api/documents/${encodeURIComponent(id)}/export?format=annotated`,
+    `${config.url}/api/documents/${encodeURIComponent(id)}/export?format=${format}`,
     { headers: headers(config) },
   );
   if (!res.ok) throw await toApiError(res);

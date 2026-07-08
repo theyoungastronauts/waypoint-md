@@ -63,11 +63,22 @@ function asStatus(value: string | null): ResponseStatus | undefined {
   return value && VALID_STATUSES.has(value as ResponseStatus) ? (value as ResponseStatus) : undefined;
 }
 
-/** The `<name>.review.md` filename for an annotated export (§11). */
-export function exportFilename(detail: Pick<DocumentDetail, "id" | "title" | "sourcePath">): string {
+/** Which export a filename is for: annotated (`.review.md`) or digest (`.digest.md`). */
+export type ExportKind = "annotated" | "digest";
+
+/**
+ * The download filename for an export (§11): `<name>.review.md` for the
+ * annotated file, `<name>.digest.md` for the digest. `<name>` is the source
+ * file stem when known, else a slug of the title, else the document id.
+ */
+export function exportFilename(
+  detail: Pick<DocumentDetail, "id" | "title" | "sourcePath">,
+  kind: ExportKind = "annotated",
+): string {
   const fromPath = detail.sourcePath ? basename(detail.sourcePath) : null;
   const base = fromPath || slugify(detail.title) || detail.id;
-  return `${base}.review.md`;
+  const suffix = kind === "digest" ? "digest" : "review";
+  return `${base}.${suffix}.md`;
 }
 
 /** File stem (no directory, no extension) of a source path. */

@@ -117,6 +117,13 @@ function ItemsPanel({
         >
           Download annotated .md
         </a>
+        <a
+          href={`/api/documents/${docId}/export?format=digest`}
+          className="flex w-full items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+          title="Compact Q→A summary for agents (SPEC §9)"
+        >
+          Download digest .md
+        </a>
         <button
           type="button"
           onClick={onFinish}

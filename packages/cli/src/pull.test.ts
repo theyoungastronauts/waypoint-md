@@ -91,6 +91,57 @@ describe("waypoint pull", () => {
     expect(JSON.parse(patch!.body!).status).toBe("pulled");
   });
 
+  it("with --digest writes both files beside the source and still marks pulled", async () => {
+    writePointer(project.dir, { id: "doc123", source: "docs/plan.md", pushedAt: "2026-07-07T00:00:00Z" });
+
+    const calls = stubFetch((call) => {
+      if (call.url.endsWith("/api/health")) return health();
+      if (call.url.includes("/export") && call.url.includes("format=digest")) {
+        return annotatedResponse("---\nwaypoint_digest: 1\n---\n\n# Digest\n", "plan.digest.md");
+      }
+      if (call.url.includes("/export")) return annotatedResponse("# Reviewed\n", "plan.review.md");
+      if (call.url.match(/\/api\/documents\/doc123$/) && call.method === "GET") {
+        return jsonResponse({ document: { id: "doc123", sourcePath: "docs/plan.md", items: [] } });
+      }
+      if (call.url.match(/\/api\/documents\/doc123$/) && call.method === "PATCH") {
+        return jsonResponse({ document: { id: "doc123", status: "pulled" } });
+      }
+      throw new Error(`unexpected ${call.method} ${call.url}`);
+    });
+
+    await runPull(undefined, { digest: true }, { config: config(), io: io.io });
+
+    const annotated = path.join(project.dir, "docs", "plan.review.md");
+    const digest = path.join(project.dir, "docs", "plan.digest.md");
+    expect(readFileSync(annotated, "utf8")).toContain("# Reviewed");
+    expect(readFileSync(digest, "utf8")).toContain("waypoint_digest: 1");
+
+    // No Phase 5 regression: pointer cleared and doc marked pulled.
+    expect(readPointer(project.dir)).toBeNull();
+    expect(calls.some((c) => c.method === "PATCH" && JSON.parse(c.body!).status === "pulled")).toBe(true);
+  });
+
+  it("without --digest writes only the annotated file (no digest fetch)", async () => {
+    writePointer(project.dir, { id: "doc123", source: "docs/plan.md", pushedAt: "2026-07-07T00:00:00Z" });
+
+    const calls = stubFetch((call) => {
+      if (call.url.endsWith("/api/health")) return health();
+      if (call.url.includes("/export")) return annotatedResponse("# Reviewed\n", "plan.review.md");
+      if (call.url.match(/\/api\/documents\/doc123$/) && call.method === "GET") {
+        return jsonResponse({ document: { id: "doc123", sourcePath: "docs/plan.md", items: [] } });
+      }
+      if (call.url.match(/\/api\/documents\/doc123$/) && call.method === "PATCH") {
+        return jsonResponse({ document: { id: "doc123", status: "pulled" } });
+      }
+      throw new Error(`unexpected ${call.method} ${call.url}`);
+    });
+
+    await runPull(undefined, {}, { config: config(), io: io.io });
+
+    expect(existsSync(path.join(project.dir, "docs", "plan.digest.md"))).toBe(false);
+    expect(calls.every((c) => !c.url.includes("format=digest"))).toBe(true);
+  });
+
   it("resolves --latest via the queue when no id or pointer is given", async () => {
     // sourcePath is null here, so pull falls back to cwd — pin it to the temp
     // project dir so the test never writes into the real working directory.

@@ -87,7 +87,7 @@ describe("GET /api/documents/:id/export?format=annotated", () => {
 
   it("rejects an unknown export format", async () => {
     const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
-    const res = await exportGet(id, "digest");
+    const res = await exportGet(id, "csv");
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("unsupported_format");
   });
@@ -95,6 +95,36 @@ describe("GET /api/documents/:id/export?format=annotated", () => {
   it("404s for an unknown document", async () => {
     const res = await exportGet("nope");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/documents/:id/export?format=digest (SPEC §9)", () => {
+  it("serves the digest with a .digest.md filename", async () => {
+    const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    const res = await exportGet(id, "digest");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/markdown");
+    expect(res.headers.get("content-disposition")).toContain(".digest.md");
+  });
+
+  it("summarizes submitted responses as Q → A pairs with status counts", async () => {
+    const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    const ids = itemIdsByWpId(id);
+    await putResponseFor(ids.q1, { text: "Right-size after the incident." }, "answered");
+    await putResponseFor(ids.q2, { selected: ["Single shared token"], other: "prefer tailscale" }, "answered");
+    await putResponseFor(ids.q3, { selected: ["staging", "dev"] }, "flagged");
+
+    const digest = await (await exportGet(id, "digest")).text();
+    expect(digest).toContain("waypoint_digest: 1");
+    expect(digest).toContain("answered: 2");
+    expect(digest).toContain("flagged: 1");
+    expect(digest).toContain("total: 3");
+    expect(digest).toContain("### q1 · text · answered");
+    expect(digest).toContain("**A:** Right-size after the incident.");
+    expect(digest).toContain("### q2 · choice (single) · answered");
+    expect(digest).toContain("**Selected:** Single shared token");
+    expect(digest).toContain("**Note:** prefer tailscale");
+    expect(digest).toContain("### q3 · choice (multi) · flagged");
   });
 });
 

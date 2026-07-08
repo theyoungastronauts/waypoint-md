@@ -9,6 +9,7 @@ import { CommentsProvider, type CommentView, type ProseSource } from "./comments
 import { CompletionSummary } from "./completion-summary";
 import { FocusProvider } from "./focus-context";
 import { ItemCard } from "./item-card";
+import { KeyboardNav } from "./keyboard-nav";
 import { MobileSheet } from "./mobile-sheet";
 import { ResponsesProvider } from "./responses-store";
 import { ReviewRail } from "./review-rail";
@@ -129,6 +130,7 @@ export function ReviewView({
           />
 
           <CommentLayer />
+          <KeyboardNav />
           </AgentProvider>
         </FocusProvider>
       </ResponsesProvider>

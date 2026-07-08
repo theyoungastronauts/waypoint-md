@@ -62,6 +62,8 @@ interface ResponsesApi {
   externalRev: (itemId: string) => number;
   toggleFlag: (itemId: string) => void;
   toggleSkip: (itemId: string) => void;
+  /** Mark an item answered (⌘⏎ keyboard action, §9), preserving its content. */
+  markAnswered: (itemId: string) => void;
   statusOf: (itemId: string) => EffectiveStatus;
   progress: Progress;
   order: ItemMeta[];
@@ -235,6 +237,15 @@ export function ResponsesProvider({
     [getDraft, saveResponse],
   );
 
+  const markAnswered = useCallback(
+    (itemId: string) => {
+      const draft = getDraft(itemId);
+      if (draft.status === "answered") return; // already answered — no redundant save
+      saveResponse(itemId, { ...draft, status: "answered" });
+    },
+    [getDraft, saveResponse],
+  );
+
   const api = useMemo<ResponsesApi>(() => {
     const statusOf = (itemId: string): EffectiveStatus =>
       effectiveStatus(draftToValue(state.drafts[itemId] ?? { text: "", selected: [], other: "", status: null }));
@@ -246,11 +257,22 @@ export function ResponsesProvider({
       externalRev: (itemId) => state.rev[itemId] ?? 0,
       toggleFlag: (itemId) => toggleStatus(itemId, "flagged"),
       toggleSkip: (itemId) => toggleStatus(itemId, "skipped"),
+      markAnswered,
       statusOf,
       progress: computeProgress(order.map((m) => statusOf(m.itemId))),
       order,
     };
-  }, [state.drafts, state.save, state.rev, getDraft, saveContent, insertIntoAnswer, toggleStatus, order]);
+  }, [
+    state.drafts,
+    state.save,
+    state.rev,
+    getDraft,
+    saveContent,
+    insertIntoAnswer,
+    toggleStatus,
+    markAnswered,
+    order,
+  ]);
 
   return <ResponsesContext.Provider value={api}>{children}</ResponsesContext.Provider>;
 }

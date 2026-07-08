@@ -256,6 +256,119 @@ appended section follow it.
 
 ---
 
+## 9. Digest export
+
+The **digest** is the second export format (alongside the annotated file):
+`GET /api/documents/:id/export?format=digest`, and `waypoint pull --digest`
+writes it as `<name>.digest.md`. It is a compact, deterministic summary of a
+document's review state — frontmatter counts, `Q → A` pairs, comments, and
+adoptive-import responses — so an agent can act on the review **without
+re-reading the source document**.
+
+The digest describes exactly the same review state as the annotated export. It
+is derived from that export (the merged answers, checkbox states, statuses, and
+comments), so the two can never disagree: an untouched pre-filled draft (§2) and
+a reviewer's override surface identically in both.
+
+This section is the **parsing contract** — the structure below is stable within
+the `1.x` line.
+
+### 9.1 Shape
+
+A digest is a markdown document: YAML frontmatter, an `# Digest — <title>`
+heading, then up to three `##` sections in this fixed order — **Questions**,
+**Comments**, **Structured responses**. A section is present **only when it has
+content**; its absence means zero of that kind.
+
+```markdown
+---
+waypoint_digest: 1
+title: "RDS Migration Plan"
+project: "acme-api"
+source: "docs/plan.md"
+status: "in_review"
+reviewed_at: "2026-07-08T12:00:00.000Z"
+answered: 2
+flagged: 1
+skipped: 0
+untouched: 0
+total: 3
+comments: 1
+synthetic: 0
+---
+
+# Digest — RDS Migration Plan
+
+## Questions
+
+### q1 · text · answered
+**Q:** **Q1 — Sizing:** Do we stay on the upgraded instance class?
+**A:** Stay on the upgraded class through end of quarter.
+
+### q2 · choice (single) · answered
+**Q:** **Q2 — Auth model for v1:**
+**Selected:** Tailscale-only, no app auth
+**Note:** revisit once we add a second device
+
+### q3 · choice (multi) · flagged
+**Q:** **Q3 — Which environments get the change first?**
+**Selected:** staging, dev
+
+## Comments
+
+### c1
+**Anchor:** "the camcorder photo beat"
+**Comment:** This contradicts the phase 2 decision.
+**Suggestion:** pays off the barcode scanner beat in act three
+```
+
+### 9.2 Frontmatter keys
+
+Fixed key order. `waypoint_digest: 1` is the format-version marker and always
+comes first. `title`, `project`, `source` appear only when known. The remaining
+keys are always present:
+
+| Key | Meaning |
+|---|---|
+| `waypoint_digest` | Digest format major version (`1`). |
+| `title` / `project` / `source` | Document metadata, when known. |
+| `status` | The document's lifecycle status (`pending`/`in_review`/`completed`/`pulled`). |
+| `reviewed_at` | ISO-8601 timestamp the digest was generated. |
+| `answered` / `flagged` / `skipped` / `untouched` | Question counts by effective status; they sum to `total`. |
+| `total` | Number of `## Questions` entries (the `wp:` items). |
+| `comments` | Number of `## Comments` entries. |
+| `synthetic` | Number of `## Structured responses` entries. |
+
+### 9.3 Entry grammar
+
+- **Questions.** One `###` entry per `wp:` item, in document order. The heading
+  is `### <id> · <type> · <status>` where `<type>` is `text`, `choice (single)`,
+  or `choice (multi)`, and `<status>` is `answered | flagged | skipped |
+  untouched` (the effective status, same rules as §5). `**Q:**` holds the prompt
+  collapsed to one line. Then:
+  - text items: `**A:** <answer>` (or `**A:** _(no answer)_`).
+  - choice items: `**Selected:** <label, label>` (or `_(none)_`), and, when a
+    freeform elaboration exists, a following `**Note:** <text>`.
+- **Comments.** One `###` entry per comment (reviewer-authored and any authored
+  in the source). `### <id>`, then `**Anchor:** "<exact quote>"`, an optional
+  `**Comment:** <body>`, and an optional `**Suggestion:** <replacement>`.
+- **Structured responses.** One `###` entry per **answered** synthetic
+  (adoptive-import) item (§8), numbered from 1 in anchor order:
+  `### <n> · <type> · <status>`, then `**Anchor:** "<source quote>"`, `**Q:**`,
+  and the same answer lines as a question entry.
+
+**Value spans.** A field label (`**Q:**`, `**A:**`, `**Selected:**`,
+`**Note:**`, `**Anchor:**`, `**Comment:**`, `**Suggestion:**`) starts at the
+beginning of a line. `**Q:**`, `**Selected:**`, and `**Anchor:**` values are
+single-line. The final field of an entry (`**A:**`, or `**Note:**` when present)
+may span multiple lines; its value runs until the next `###`/`##` heading.
+
+The digest is **not** round-tripped: there is no parser that reconstructs review
+state from it. It is a read-only projection. The annotated export remains the
+canonical, byte-faithful artifact (§7).
+
+---
+
 ## Warning codes
 
 `parseDocument` may emit any of: `missing-id`, `duplicate-id`, `missing-type`,

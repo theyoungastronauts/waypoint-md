@@ -43,6 +43,7 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
     <div
       ref={registerRef}
       id={`item-${itemId}`}
+      data-item-card
       onFocus={() => setFocused(itemId)}
       className={cn(
         "my-6 scroll-mt-24 rounded-lg border bg-card p-5 shadow-xs transition-colors",

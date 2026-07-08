@@ -75,8 +75,9 @@ export function createProgram(version: string, io: IO = consoleIo): Command {
     .option("-u, --url <url>", "server URL")
     .option("-p, --project <project>", "project name")
     .option("--latest", "pull the most recent document for this project")
-    .action(async (id: string | undefined, opts: CommonOpts & { latest?: boolean }) => {
-      await runPull(id, { latest: opts.latest }, deps(opts, io));
+    .option("--digest", "also write the compact digest (<name>.digest.md)")
+    .action(async (id: string | undefined, opts: CommonOpts & { latest?: boolean; digest?: boolean }) => {
+      await runPull(id, { latest: opts.latest, digest: opts.digest }, deps(opts, io));
     });
 
   program

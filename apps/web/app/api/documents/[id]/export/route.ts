@@ -1,5 +1,6 @@
 import { applyReview } from "@waypoint/spec";
 import { toErrorResponse, HttpError } from "@/lib/api/http";
+import { buildDigest } from "@/lib/digest";
 import { getDocumentDetail } from "@/lib/documents";
 import { buildReviewState, exportFilename } from "@/lib/review-state";
 import { appendSyntheticResponses, buildSyntheticEntries } from "@/lib/synthetic-export";
@@ -11,21 +12,23 @@ interface RouteContext {
 }
 
 /**
- * GET /api/documents/:id/export?format=annotated — the annotated markdown
- * download (§8, §11). The body is `applyReview(raw_md, reviewState)`: a pure
- * function of the source and the persisted review. An untouched document
- * round-trips byte-identically (no responses → empty review → source returned
- * unchanged). The `digest` format lands in Phase 9.
+ * GET /api/documents/:id/export?format=annotated|digest — the review downloads
+ * (§8, §11). Both are pure functions of `(raw_md, persisted review)`:
+ *   - **annotated** (default): `applyReview(raw_md, review)` — the source with
+ *     answers/checks/comments spliced in. An untouched document round-trips
+ *     byte-identically (no responses → empty review → source returned unchanged).
+ *   - **digest**: the compact `Q → A` summary for cheap agent consumption
+ *     (SPEC §9), built from the same review state.
  */
 export async function GET(req: Request, ctx: RouteContext): Promise<Response> {
   try {
     const { id } = await ctx.params;
     const format = new URL(req.url).searchParams.get("format") ?? "annotated";
-    if (format !== "annotated") {
+    if (format !== "annotated" && format !== "digest") {
       throw new HttpError(
         400,
         "unsupported_format",
-        `Unknown export format "${format}". Only "annotated" is available.`,
+        `Unknown export format "${format}". Use "annotated" or "digest".`,
       );
     }
 
@@ -34,18 +37,25 @@ export async function GET(req: Request, ctx: RouteContext): Promise<Response> {
       throw new HttpError(404, "not_found", "No document with that id.");
     }
 
-    // Caller-supplied timestamp keeps applyReview pure; it is only recorded when
-    // the review is non-empty (untouched export stays byte-identical).
-    const review = buildReviewState(detail, new Date().toISOString());
-    // Synthetic items never enter the splice writer (§5.7): their responses are
-    // appended below the (byte-faithful) document body, and only when they exist.
-    const annotated = appendSyntheticResponses(
-      applyReview(detail.rawMd, review),
-      buildSyntheticEntries(detail),
-    );
-    const filename = exportFilename(detail);
+    // Caller-supplied timestamp keeps the writers pure; it is only recorded when
+    // the review is non-empty (untouched annotated export stays byte-identical).
+    const now = new Date().toISOString();
 
-    return new Response(annotated, {
+    let body: string;
+    if (format === "digest") {
+      body = buildDigest(detail, now);
+    } else {
+      const review = buildReviewState(detail, now);
+      // Synthetic items never enter the splice writer (§5.7): their responses are
+      // appended below the (byte-faithful) document body, and only when they exist.
+      body = appendSyntheticResponses(
+        applyReview(detail.rawMd, review),
+        buildSyntheticEntries(detail),
+      );
+    }
+    const filename = exportFilename(detail, format === "digest" ? "digest" : "annotated");
+
+    return new Response(body, {
       status: 200,
       headers: {
         "content-type": "text/markdown; charset=utf-8",

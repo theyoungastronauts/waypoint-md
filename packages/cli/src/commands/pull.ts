@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { exportAnnotated, getDocument, listDocuments, markPulled } from "../client";
+import { exportAnnotated, exportDigest, getDocument, listDocuments, markPulled } from "../client";
 import { handshake } from "../handshake";
 import { CliError } from "../io";
 import { clearPointer, readPointer } from "../pointer";
@@ -9,6 +9,8 @@ import type { CommandDeps } from "./push";
 
 export interface PullOptions {
   latest?: boolean;
+  /** Also fetch the compact digest export beside the annotated file (§12, SPEC §9). */
+  digest?: boolean;
 }
 
 /**
@@ -30,10 +32,12 @@ export function reviewTargetPath(
 }
 
 /**
- * `waypoint pull [id|--latest]` (§12). Resolves the target document (explicit id
- * → --latest for this project → the pending pointer), writes the annotated
- * markdown beside its source, clears the pointer, and marks the document
- * `pulled`. The `--digest` flag is deliberately not here — it lands in Phase 9.
+ * `waypoint pull [id|--latest] [--digest]` (§12). Resolves the target document
+ * (explicit id → --latest for this project → the pending pointer), writes the
+ * annotated markdown beside its source, optionally writes the compact digest
+ * beside it too (`--digest`, SPEC §9), then clears the pointer and marks the
+ * document `pulled`. The digest is fetched before the pointer/`pulled` side
+ * effects, so a digest fetch failure never leaves the pull half-applied.
  */
 export async function runPull(
   idArg: string | undefined,
@@ -58,12 +62,22 @@ export async function runPull(
   }
 
   const detail = await getDocument(config, id);
-  const exported = await exportAnnotated(config, id);
+  const annotated = await exportAnnotated(config, id);
+  // Fetch the digest up front (before any writes/side effects) so a failure here
+  // fails the whole pull cleanly rather than half-writing.
+  const digest = options.digest ? await exportDigest(config, id) : null;
 
-  const target = reviewTargetPath(config.projectRoot, detail.sourcePath, exported.filename, id);
+  const target = reviewTargetPath(config.projectRoot, detail.sourcePath, annotated.filename, id);
   mkdirSync(path.dirname(target), { recursive: true });
-  writeFileSync(target, exported.body, "utf8");
+  writeFileSync(target, annotated.body, "utf8");
   io.log(`Wrote ${path.relative(process.cwd(), target)}`);
+
+  if (digest) {
+    // Land the digest in the same directory as the annotated file.
+    const digestTarget = reviewTargetPath(config.projectRoot, detail.sourcePath, digest.filename, id);
+    writeFileSync(digestTarget, digest.body, "utf8");
+    io.log(`Wrote ${path.relative(process.cwd(), digestTarget)}`);
+  }
 
   await markPulled(config, id);
   if (pointer && pointer.id === id) {
