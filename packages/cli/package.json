@@ -9,7 +9,7 @@
   "bin": {
     "waypoint": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "skills"],
   "publishConfig": {
     "access": "public"
   },
@@ -19,7 +19,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "build": "tsc -p tsconfig.build.json"
+    "bundle-skill": "node scripts/bundle-skill.mjs",
+    "build": "node scripts/bundle-skill.mjs && tsc -p tsconfig.build.json",
+    "prepack": "node scripts/bundle-skill.mjs"
   },
   "dependencies": {
     "commander": "^12.1.0"

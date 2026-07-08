@@ -271,6 +271,42 @@ describe("buildDigest — synthetic (adoptive-import) responses", () => {
   });
 });
 
+describe("buildDigest — strips wp: markup folded into a prompt (Phase 9 W1)", () => {
+  // A comment authored inside a question block (anchored to prompt text) sits
+  // between the prompt and the answer, so the digest's re-parse folds the raw
+  // `<!-- wp:comment -->` block into promptMd. The Q→A fields must stay clean;
+  // the comment must still surface in `## Comments`.
+  const detail = makeDetail({
+    title: "Folded comment",
+    rawMd:
+      '<!-- wp:question id="q1" type="text" -->\n' +
+      "**Pick a database** for the service.\n" +
+      '<!-- wp:comment id="c1" exact="database" -->\n' +
+      "Use Postgres, not SQLite, at this scale.\n" +
+      "<!-- /wp:comment -->\n" +
+      "<!-- wp:answer -->\n" +
+      "<!-- /wp:answer -->\n" +
+      "<!-- /wp:question -->\n",
+    items: [item("q1", { text: "SQLite for v1." }, "answered")],
+  });
+
+  it("keeps the **Q:** line free of comment syntax and body text", () => {
+    const digest = buildDigest(detail, AT);
+    const qLine = digest.split("\n").find((l) => l.startsWith("**Q:**")) ?? "";
+    expect(qLine).toContain("Pick a database");
+    expect(qLine).not.toContain("wp:comment");
+    expect(qLine).not.toContain("<!--");
+    expect(qLine).not.toContain("Use Postgres");
+  });
+
+  it("still surfaces the folded comment in the Comments section", () => {
+    const digest = buildDigest(detail, AT);
+    expect(digest).toContain("## Comments");
+    expect(digest).toContain('**Anchor:** "database"');
+    expect(digest).toContain("**Comment:** Use Postgres, not SQLite, at this scale.");
+  });
+});
+
 describe("buildDigest — flagged item with no answer", () => {
   it("shows the flag status and a no-answer marker", () => {
     const detail = makeDetail({

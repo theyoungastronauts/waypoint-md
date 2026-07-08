@@ -16,7 +16,7 @@ do not rely on `nvm use`. Root scripts recurse over the workspace: `pnpm typeche
 
 - **Location**: `apps/web/`
 - **Stack**: TypeScript 5, Next.js 15 (App Router), React 19, Tailwind CSS v4 + shadcn/ui (dark theme default, light available), Drizzle ORM + better-sqlite3 (WAL). API routes under `apps/web/app/api/`.
-- **Key patterns**: the `nextjs-patterns` skill (auto-loads; installed at `.claude/skills/nextjs-patterns/SKILL.md`)
+- **Key patterns**: follow the conventions already in `apps/web` — API routes under `app/api/*` (zod-validated, covered by the central auth middleware), Drizzle ORM + better-sqlite3 for data, TanStack Query v5 for client fetching, and server components for reads. The generic `nextjs-patterns` skill predates this stack (it assumes a single `lib/api.ts`, trailing-slash endpoints, dayjs) — prefer the real code where they differ.
 - **API consumption**: Check integration summaries in `docs/integration/` for endpoint contracts
 - **On-demand references**: Use `/react` for React best practices, `/tailwind` for Tailwind v4 patterns
 

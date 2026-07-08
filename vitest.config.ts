@@ -19,7 +19,9 @@ export default defineConfig({
       "packages/*/src/**/*.{test,spec}.ts",
       "apps/web/**/*.{test,spec}.{ts,tsx}",
     ],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**"],
+    // `apps/web/e2e/**` holds Playwright specs (`pnpm test:e2e`), which drive a
+    // real browser and must never run under vitest — keep the standing gate fast.
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/e2e/**"],
     environment: "node",
     passWithNoTests: true,
   },

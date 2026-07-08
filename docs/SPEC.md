@@ -359,9 +359,14 @@ keys are always present:
 
 **Value spans.** A field label (`**Q:**`, `**A:**`, `**Selected:**`,
 `**Note:**`, `**Anchor:**`, `**Comment:**`, `**Suggestion:**`) starts at the
-beginning of a line. `**Q:**`, `**Selected:**`, and `**Anchor:**` values are
-single-line. The final field of an entry (`**A:**`, or `**Note:**` when present)
-may span multiple lines; its value runs until the next `###`/`##` heading.
+beginning of a line. **Any line that begins with one of these `**Label:**`
+tokens is a field boundary** — it ends the value of the preceding field. So a
+multi-line value runs until the next line that starts with a `**Label:**`, a
+`###` entry heading, or a `##` section heading, whichever comes first.
+`**Q:**`, `**Selected:**`, and `**Anchor:**` values are always single-line;
+`**A:**`, `**Note:**`, `**Comment:**`, and `**Suggestion:**` values may span
+multiple lines and end at the next boundary. (The renderer emits each field on
+its own line, so this boundary rule is unambiguous in practice.)
 
 The digest is **not** round-tripped: there is no parser that reconstructs review
 state from it. It is a read-only projection. The annotated export remains the

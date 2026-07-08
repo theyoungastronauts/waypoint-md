@@ -4,6 +4,7 @@ import path from "node:path";
 import { DEFAULT_URL, loadProjectConfig, saveProjectConfig, type ProjectConfig } from "../config";
 import { POINTER_DIR, PROJECT_CONFIG_FILE } from "../paths";
 import { CliError, type IO } from "../io";
+import { installSkill } from "../skill";
 
 export interface InitOptions {
   url?: string;
@@ -12,16 +13,17 @@ export interface InitOptions {
   noGitignore?: boolean;
   /** Overwrite an existing `.waypoint.json`. */
   force?: boolean;
+  /** Install the skill globally (`~/.claude/skills/`) instead of project-local. */
+  global?: boolean;
+  /** Skip installing the Claude Code skill. */
+  noSkill?: boolean;
 }
 
 /**
  * `waypoint init` (§12): write a project-local `.waypoint.json` (server URL,
- * project, defaults — never a token) and add the `.waypoint/` pointer dir to
- * `.gitignore`. Runs at the current directory.
- *
- * Skill installation is intentionally NOT done here — it lands in Phase 10, once
- * the skill artifact exists (see the marked seam below). `init` must not claim to
- * install a skill.
+ * project, defaults — never a token), add the `.waypoint/` pointer dir to
+ * `.gitignore`, and install the Claude Code skill (§13). Runs at the current
+ * directory.
  */
 export function runInit(options: InitOptions, io: IO, cwd: string = process.cwd()): void {
   const configPath = path.join(cwd, PROJECT_CONFIG_FILE);
@@ -44,12 +46,20 @@ export function runInit(options: InitOptions, io: IO, cwd: string = process.cwd(
     updateGitignore(cwd, io);
   }
 
-  // --- Phase 10 seam: skill installation ---------------------------------
-  // `waypoint init` will also install the Claude Code skill into
-  // `.claude/skills/waypoint/` (or `~/.claude/skills/` with --global) once the
-  // skill artifact exists (§13). Deliberately deferred; do not announce a skill
-  // install until this is implemented.
-  // -----------------------------------------------------------------------
+  if (!options.noSkill) {
+    installSkillStep(options.global ?? false, cwd, io);
+  }
+}
+
+/** Install the bundled Waypoint skill (§13); a failure is a warning, not fatal. */
+function installSkillStep(global: boolean, cwd: string, io: IO): void {
+  const result = installSkill({ global, cwd });
+  if (result.installed) {
+    const where = global ? "globally" : "in this project";
+    io.log(`Installed the Waypoint skill ${where} at ${result.dest} (use /waypoint in Claude Code).`);
+  } else {
+    io.warn(`Skipped skill install: ${result.reason}. Re-run after installing waypoint-md, or pass --no-skill.`);
+  }
 }
 
 /** Idempotently add `.waypoint/` to `.gitignore` at `cwd`. */

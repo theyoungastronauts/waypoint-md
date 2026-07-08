@@ -14,6 +14,20 @@ const bodySchema = z.object({ token: z.string().min(1) });
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 /**
+ * Whether to set the `Secure` flag on the session cookie (§15). Opt-in, not
+ * default: the recommended deployment is `tailscale serve` (which terminates
+ * TLS) or plain HTTP over a Tailscale/LAN address, and a `Secure` cookie would
+ * silently fail to set over plain HTTP, locking the user out of their own box.
+ * Set `WAYPOINT_COOKIE_SECURE=1` when Waypoint is reachable only over HTTPS
+ * (e.g. behind a TLS-terminating reverse proxy) to harden the cookie against
+ * downgrade. httpOnly + sameSite=lax apply regardless.
+ */
+function cookieSecure(): boolean {
+  const raw = process.env.WAYPOINT_COOKIE_SECURE?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+/**
  * POST /api/auth/login — exchange the shared token for an httpOnly session
  * cookie (§8, §15). An open path (reachable without an existing session);
  * middleware never guards it. When no server token is configured there is
@@ -44,6 +58,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       value: token,
       httpOnly: true,
       sameSite: "lax",
+      secure: cookieSecure(),
       path: "/",
       maxAge: MAX_AGE_SECONDS,
     });

@@ -111,6 +111,24 @@ describe("POST /api/auth/login (cookie exchange)", () => {
     expect(setCookie.toLowerCase()).toContain("httponly");
   });
 
+  it("omits Secure by default (plain-HTTP LAN/Tailscale deployments)", async () => {
+    setToken(TOKEN);
+    delete process.env.WAYPOINT_COOKIE_SECURE;
+    const res = await login(loginRequest({ token: TOKEN }));
+    expect((res.headers.get("set-cookie") ?? "").toLowerCase()).not.toContain("secure");
+  });
+
+  it("sets Secure when WAYPOINT_COOKIE_SECURE is enabled", async () => {
+    setToken(TOKEN);
+    process.env.WAYPOINT_COOKIE_SECURE = "1";
+    try {
+      const res = await login(loginRequest({ token: TOKEN }));
+      expect((res.headers.get("set-cookie") ?? "").toLowerCase()).toContain("secure");
+    } finally {
+      delete process.env.WAYPOINT_COOKIE_SECURE;
+    }
+  });
+
   it("rejects the wrong token with 401 and sets no cookie", async () => {
     setToken(TOKEN);
     const res = await login(loginRequest({ token: "wrong" }));

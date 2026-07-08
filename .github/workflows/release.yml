@@ -1,0 +1,76 @@
+name: Release
+
+# Publishing is a deliberate, tag-triggered manual step (see docs/RELEASING.md).
+# This workflow runs ONLY on a pushed version tag — never on a push to main and
+# never on a PR — so nothing can be published by ordinary development. The publish
+# job additionally requires an NPM_TOKEN secret; without it, publish is skipped.
+# In this repository `waypoint-md` is also `private: true`, so `npm publish` would
+# refuse regardless — a second, independent guard against accidental publishing.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  publish:
+    needs: gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # registry-url wires npm to use NODE_AUTH_TOKEN for the publish.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+
+      # Builds the CLI and bundles the skill into the package (files: dist, skills).
+      - run: pnpm --filter waypoint-md build
+
+      # Sanity: the pushed tag should match the CLI package version being published.
+      - name: Check tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./packages/cli/package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match waypoint-md version $PKG" >&2
+            exit 1
+          fi
+
+      # Publish only when a token is configured. `waypoint-md` is private:true in
+      # this repo, so this step is a no-op recipe until the deliberate release
+      # flip in docs/RELEASING.md; npm refuses to publish a private package.
+      - name: Publish waypoint-md
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        working-directory: packages/cli
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

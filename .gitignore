@@ -13,6 +13,9 @@ build/
 # next (auto-generated)
 next-env.d.ts
 
+# CLI skill bundle (build artifact; source of truth is repo-root skills/)
+/packages/cli/skills/
+
 # testing / coverage
 coverage/
 test-results/

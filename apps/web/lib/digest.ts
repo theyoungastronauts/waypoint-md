@@ -117,7 +117,7 @@ function renderQuestions(items: SpecItem[], statuses: EffectiveStatus[]): string
   if (items.length === 0) return "";
   const entries = items.map((item, i) => {
     const heading = `### ${item.wpId || "(no id)"} · ${typeLabel(item)} · ${statuses[i]}`;
-    const lines = [heading, `**Q:** ${oneLine(item.promptMd)}`, ...answerLines(item)];
+    const lines = [heading, `**Q:** ${oneLine(stripWpMarkup(item.promptMd))}`, ...answerLines(item)];
     return lines.join("\n");
   });
   return `## Questions\n\n${entries.join("\n\n")}`;
@@ -129,11 +129,11 @@ function answerLines(item: SpecItem): string[] {
   if (item.type === "choice") {
     const selected = response?.selected ?? [];
     const lines = [`**Selected:** ${selected.length > 0 ? selected.join(", ") : "_(none)_"}`];
-    const other = response?.other?.trim();
+    const other = stripWpMarkup(response?.other ?? "").trim();
     if (other) lines.push(`**Note:** ${other}`);
     return lines;
   }
-  const text = response?.text?.trim();
+  const text = stripWpMarkup(response?.text ?? "").trim();
   return [`**A:** ${text || "_(no answer)_"}`];
 }
 
@@ -175,12 +175,31 @@ function syntheticAnswerLines(entry: SyntheticEntry): string[] {
   if (entry.type === "choice") {
     const selected = entry.value?.selected ?? [];
     const lines = [`**Selected:** ${selected.length > 0 ? selected.join(", ") : "_(none)_"}`];
-    const other = entry.value?.other?.trim();
+    const other = stripWpMarkup(entry.value?.other ?? "").trim();
     if (other) lines.push(`**Note:** ${other}`);
     return lines;
   }
-  const text = entry.value?.text?.trim();
+  const text = stripWpMarkup(entry.value?.text ?? "").trim();
   return [`**A:** ${text || "_(no answer)_"}`];
+}
+
+/**
+ * Defensive scrub of `wp:` structural markup that a splice may have folded into a
+ * prompt or answer value (Phase 9 W1). A comment anchored *inside* a question or
+ * answer block splices in right after the anchored paragraph; because the digest
+ * is derived by re-parsing the annotated export, that raw `<!-- wp:comment -->`
+ * block would otherwise land in the surrounding `promptMd`/answer text and
+ * pollute the `**Q:**`/`**A:**` fields. The comment still surfaces intact in the
+ * `## Comments` section — nothing is lost — so here we just strip the folded-in
+ * markup. A normal document has no `wp:` markup in these fields, so this is a
+ * no-op there; agents parsing the digest (§9) never see stray comment syntax.
+ */
+function stripWpMarkup(s: string): string {
+  return s
+    // Whole comment blocks first, including any nested suggestion + body text.
+    .replace(/<!--\s*wp:comment\b[\s\S]*?<!--\s*\/wp:comment\s*-->/g, "")
+    // Any residual standalone wp: open/close markers.
+    .replace(/<!--\s*\/?wp:[\s\S]*?-->/g, "");
 }
 
 /** Combine a synthetic entry's value + stored status into an {@link ItemResponse}. */

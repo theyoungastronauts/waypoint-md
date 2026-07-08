@@ -36,9 +36,27 @@ describe("waypoint init", () => {
     expect(gitignore).toContain(".waypoint/");
   });
 
-  it("does not claim to install a skill (deferred to Phase 10)", () => {
+  it("installs the Claude Code skill project-local by default", () => {
     runInit({}, io.io, project.dir);
-    expect(io.text().toLowerCase()).not.toContain("skill");
+    const skillFile = path.join(project.dir, ".claude", "skills", "waypoint", "SKILL.md");
+    expect(existsSync(skillFile)).toBe(true);
+    // References ship alongside SKILL.md.
+    expect(existsSync(path.join(project.dir, ".claude", "skills", "waypoint", "references", "authoring.md"))).toBe(true);
+    expect(io.text().toLowerCase()).toContain("skill");
+  });
+
+  it("installs the skill globally with --global", () => {
+    runInit({ global: true }, io.io, project.dir);
+    // withTempHome redirects ~ to a scratch dir.
+    const globalSkill = path.join(home.home, ".claude", "skills", "waypoint", "SKILL.md");
+    expect(existsSync(globalSkill)).toBe(true);
+    // ...and not project-local.
+    expect(existsSync(path.join(project.dir, ".claude", "skills", "waypoint", "SKILL.md"))).toBe(false);
+  });
+
+  it("skips the skill install with noSkill", () => {
+    runInit({ noSkill: true }, io.io, project.dir);
+    expect(existsSync(path.join(project.dir, ".claude", "skills", "waypoint"))).toBe(false);
   });
 
   it("is idempotent about the .gitignore entry", () => {

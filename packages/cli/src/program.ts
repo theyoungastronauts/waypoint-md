@@ -35,17 +35,35 @@ export function createProgram(version: string, io: IO = consoleIo): Command {
 
   program
     .command("init")
-    .description("Write .waypoint.json and ignore the pointer dir")
+    .description("Write .waypoint.json, ignore the pointer dir, and install the skill")
     .option("-u, --url <url>", "server URL")
     .option("-p, --project <project>", "default project name")
     .option("--no-gitignore", "do not touch .gitignore")
     .option("--force", "overwrite an existing .waypoint.json")
-    .action((opts: { url?: string; project?: string; gitignore?: boolean; force?: boolean }) => {
-      runInit(
-        { url: opts.url, project: opts.project, noGitignore: opts.gitignore === false, force: opts.force },
-        io,
-      );
-    });
+    .option("--global", "install the skill globally (~/.claude/skills) instead of project-local")
+    .option("--no-skill", "do not install the Claude Code skill")
+    .action(
+      (opts: {
+        url?: string;
+        project?: string;
+        gitignore?: boolean;
+        force?: boolean;
+        global?: boolean;
+        skill?: boolean;
+      }) => {
+        runInit(
+          {
+            url: opts.url,
+            project: opts.project,
+            noGitignore: opts.gitignore === false,
+            force: opts.force,
+            global: opts.global,
+            noSkill: opts.skill === false,
+          },
+          io,
+        );
+      },
+    );
 
   program
     .command("push")
