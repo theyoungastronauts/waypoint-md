@@ -344,7 +344,10 @@ export function responseIsEmpty(value: ResponseValue): boolean {
   const hasSelected = Array.isArray(value.selected) && value.selected.length > 0;
   const hasOther = typeof value.other === "string" && value.other.trim().length > 0;
   const hasStatus = !!value.status;
-  return !(hasText || hasSelected || hasOther || hasStatus);
+  // An explicit-empty response (W1) carries intent — the reviewer cleared a
+  // pre-filled draft — so it is not "empty" for review-non-emptiness purposes.
+  const isCleared = value.cleared === true;
+  return !(hasText || hasSelected || hasOther || hasStatus || isCleared);
 }
 
 /** True when a review has no meaningful responses and no comments (§11). */

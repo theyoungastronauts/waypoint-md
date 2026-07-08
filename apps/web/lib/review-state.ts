@@ -1,10 +1,10 @@
 import {
-  responseIsEmpty,
   type ResponseStatus,
   type ResponseValue,
   type ReviewComment,
   type ReviewState,
 } from "@waypoint/spec";
+import { responseHasContent } from "./review-status";
 import type { DocumentDetail } from "./documents";
 
 /**
@@ -26,12 +26,21 @@ export function buildReviewState(detail: DocumentDetail, reviewedAt: string): Re
   for (const item of detail.items) {
     if (!item.wpId || item.synthetic) continue;
     const stored = item.response;
+    // No response row means the item was never touched: leave any pre-filled
+    // draft in the source exactly as it was (§5.2).
     if (!stored) continue;
 
     const value: ResponseValue = { ...(stored.value ?? {}) };
     const status = asStatus(stored.status);
     if (status) value.status = status;
-    if (responseIsEmpty(value)) continue;
+
+    // A response row that exists but carries no answer content is an explicit
+    // clear (W1): the reviewer emptied a pre-filled draft. Mark it so the writer
+    // writes an empty interior rather than resurrecting the draft. The existence
+    // of the DB row is the sentinel — distinct from "never touched" above.
+    if (!responseHasContent(value)) {
+      value.cleared = true;
+    }
 
     responses[item.wpId] = value;
   }

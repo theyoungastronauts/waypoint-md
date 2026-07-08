@@ -19,7 +19,15 @@ const textareaClass =
  * text-only response with no box checked is valid and answerable. Selections
  * save immediately (a discrete click); elaboration autosaves on a debounce.
  */
-export function ChoiceGroup({ itemId, item }: { itemId: string; item: Item }) {
+export function ChoiceGroup({
+  itemId,
+  item,
+  optionLabelsHtml,
+}: {
+  itemId: string;
+  item: Item;
+  optionLabelsHtml: string[];
+}) {
   const { getDraft, saveContent } = useResponses();
   const { setFocused } = useFocus();
   const multi = item.select === "multi";
@@ -68,7 +76,13 @@ export function ChoiceGroup({ itemId, item }: { itemId: string; item: Item }) {
                   onFocus={() => setFocused(itemId)}
                   onChange={() => onToggle(option.label)}
                 />
-                <span>{option.label}</span>
+                {optionLabelsHtml[i] !== undefined ? (
+                  // Inline markdown, sanitized server-side (W2): restores bold/code/
+                  // links in labels. The label source string stays the value key.
+                  <span className="wp-prose-inline" dangerouslySetInnerHTML={{ __html: optionLabelsHtml[i] }} />
+                ) : (
+                  <span>{option.label}</span>
+                )}
               </label>
             </li>
           );

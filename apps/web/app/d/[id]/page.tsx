@@ -59,7 +59,17 @@ export default async function DocumentPage({ params }: DocPageProps) {
 
       <WarningsBanner warnings={docWarnings} />
 
-      <ReviewView docId={doc.id} segments={segments} />
+      <ReviewView
+        docId={doc.id}
+        segments={segments}
+        comments={doc.comments.map((c) => ({
+          id: c.id,
+          anchor: c.anchor,
+          bodyMd: c.bodyMd,
+          suggestionMd: c.suggestionMd,
+          createdAt: c.createdAt,
+        }))}
+      />
     </div>
   );
 }

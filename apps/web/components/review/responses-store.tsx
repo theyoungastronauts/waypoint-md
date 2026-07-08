@@ -123,6 +123,12 @@ export function ResponsesProvider({
 
   // Timers that fade a "saved" tick back to idle; cleared on unmount.
   const fadeTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // Per-item save serialization (W3): a promise chain so the same item's PUTs are
+  // sent in issue order (the server never ends up behind a newer local value),
+  // and a monotonic sequence so only the latest save's result drives the tick —
+  // a stale in-flight response can't flip the tick to "Saved" over newer state.
+  const chainRef = useRef(new Map<string, Promise<unknown>>());
+  const seqRef = useRef(new Map<string, number>());
 
   const mutation = useMutation({
     mutationFn: async (vars: { itemId: string; body: unknown }) => {
@@ -141,22 +147,30 @@ export function ResponsesProvider({
       // Optimistic: reflect the draft immediately (progress ring, status dots).
       dispatch({ kind: "commit", itemId, draft });
       const body = draftToBody(typeById[itemId], draft);
-      mutation.mutate(
-        { itemId, body },
-        {
-          onSuccess: () => {
-            dispatch({ kind: "save", itemId, status: "saved" });
-            const existing = fadeTimers.current.get(itemId);
-            if (existing) clearTimeout(existing);
-            fadeTimers.current.set(
-              itemId,
-              setTimeout(() => dispatch({ kind: "save", itemId, status: "idle" }), 1500),
-            );
-          },
+
+      const mySeq = (seqRef.current.get(itemId) ?? 0) + 1;
+      seqRef.current.set(itemId, mySeq);
+      const isLatest = () => seqRef.current.get(itemId) === mySeq;
+
+      const prev = chainRef.current.get(itemId) ?? Promise.resolve();
+      const next = prev
+        .catch(() => {}) // a prior failure must not stall later saves for this item
+        .then(() => mutation.mutateAsync({ itemId, body }))
+        .then(() => {
+          if (!isLatest()) return; // a newer save is already in flight — ignore this result
+          dispatch({ kind: "save", itemId, status: "saved" });
+          const existing = fadeTimers.current.get(itemId);
+          if (existing) clearTimeout(existing);
+          fadeTimers.current.set(
+            itemId,
+            setTimeout(() => dispatch({ kind: "save", itemId, status: "idle" }), 1500),
+          );
+        })
+        .catch(() => {
           // Keep the draft (never lose the answer) but do not claim it saved.
-          onError: () => dispatch({ kind: "save", itemId, status: "error" }),
-        },
-      );
+          if (isLatest()) dispatch({ kind: "save", itemId, status: "error" });
+        });
+      chainRef.current.set(itemId, next);
     },
     [mutation, typeById],
   );

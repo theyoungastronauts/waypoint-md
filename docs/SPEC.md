@@ -192,7 +192,28 @@ invalidates a later span.
   their suggestions come back exactly.
 
 The frontmatter stamp is applied **only when the review is non-empty**, so an
-untouched document exports identically to its source.
+untouched document exports identically to its source. It is also applied only
+when the review *materially* touches the document — a response keyed to a
+`wp_id` that does not exist in the source (and no comments) changes nothing and
+stamps nothing.
+
+### Explicit-empty answers (clearing a pre-filled draft)
+
+A `wp:answer` block may ship with a **pre-filled draft** (an agent's suggested
+answer). Two reviewer actions must be distinguished on export:
+
+- **Never touched** — no response is supplied for the item. The source draft is
+  left exactly as it was (byte-identical).
+- **Explicitly cleared** — the reviewer deleted the draft. The response carries
+  an explicit-empty sentinel (`cleared: true` on the `ResponseValue`), and the
+  writer replaces the answer interior with an empty one, so the rejected draft
+  does **not** reappear in the export.
+
+Without the sentinel, an absent-or-blank response is indistinguishable from
+"untouched," and a deleted draft would silently return on export. `cleared` is
+an **export input only**: the parser never emits it, and a cleared answer
+round-trips to *no* embedded response (the block is empty). Clearing an answer
+that was already empty changes nothing but the frontmatter stamp.
 
 ## 8. Documents without the convention
 

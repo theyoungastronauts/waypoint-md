@@ -69,4 +69,30 @@ describe("PUT /api/items/:id/response", () => {
     const res = await putRequest(itemId, { value: {}, status: "bogus" });
     expect(res.status).toBe(400);
   });
+
+  it("advances pending → in_review on the first real answer (W4)", async () => {
+    const { id: docId } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    expect(getDocumentDetail(docId)!.status).toBe("pending");
+
+    const itemId = getDocumentDetail(docId)!.items[0].id;
+    await putRequest(itemId, { value: { text: "an answer" }, status: "answered" });
+    expect(getDocumentDetail(docId)!.status).toBe("in_review");
+  });
+
+  it("does not advance on an empty (cleared) save", async () => {
+    const { id: docId } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    const itemId = getDocumentDetail(docId)!.items[0].id;
+    await putRequest(itemId, { value: {}, status: null });
+    expect(getDocumentDetail(docId)!.status).toBe("pending");
+  });
+
+  it("does not regress a completed document back to in_review", async () => {
+    const { id: docId } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    // Simulate a later edit on a completed doc: status must stay completed.
+    const { updateDocument } = await import("@/lib/documents");
+    updateDocument(docId, { status: "completed" });
+    const itemId = getDocumentDetail(docId)!.items[0].id;
+    await putRequest(itemId, { value: { text: "late edit" }, status: "answered" });
+    expect(getDocumentDetail(docId)!.status).toBe("completed");
+  });
 });

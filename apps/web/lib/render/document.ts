@@ -5,6 +5,13 @@ import { renderMarkdownToSafeHtml } from "./pipeline";
 export interface ProseSegment {
   kind: "prose";
   html: string;
+  /**
+   * The exact source-markdown slice this prose was rendered from, and its
+   * absolute offset in `raw_md`. Selection comments map a DOM selection over the
+   * rendered prose back to this source slice (§10); highlights map the other way.
+   */
+  source: string;
+  sourceStart: number;
 }
 
 /** A `wp:question` block, surfaced as a parsed item for a card renderer. */
@@ -39,20 +46,20 @@ export function renderDocument(rawMd: string): RenderedDocument {
   const segments: DocumentSegment[] = [];
   let cursor = 0;
 
-  const pushProse = (text: string) => {
+  const pushProse = (text: string, sourceStart: number) => {
     if (text.trim().length === 0) return;
-    segments.push({ kind: "prose", html: renderMarkdownToSafeHtml(text) });
+    segments.push({ kind: "prose", html: renderMarkdownToSafeHtml(text), source: text, sourceStart });
   };
 
   for (const item of items) {
     const { start, end } = item.spans.block;
     // Defensive: skip any item whose span overlaps what we've already emitted.
     if (start < cursor) continue;
-    pushProse(rawMd.slice(cursor, start));
+    pushProse(rawMd.slice(cursor, start), cursor);
     segments.push({ kind: "item", item });
     cursor = end;
   }
-  pushProse(rawMd.slice(cursor));
+  pushProse(rawMd.slice(cursor), cursor);
 
   return {
     segments,

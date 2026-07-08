@@ -24,7 +24,7 @@ function exportGet(docId: string, format = "annotated") {
   });
 }
 
-async function putResponseFor(itemId: string, value: ResponseValue, status: string) {
+async function putResponseFor(itemId: string, value: ResponseValue, status: string | null) {
   const res = await putResponse(
     new Request(`http://localhost/api/items/${itemId}/response`, {
       method: "PUT",
@@ -95,6 +95,28 @@ describe("GET /api/documents/:id/export?format=annotated", () => {
   it("404s for an unknown document", async () => {
     const res = await exportGet("nope");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("clearing a pre-filled draft does not resurrect it on export (W1)", () => {
+  it("empties the answer interior when a response row exists but is blank", async () => {
+    const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    const ids = itemIdsByWpId(id);
+
+    // q1 ships with a pre-filled draft. Clearing the field sends an empty value.
+    await putResponseFor(ids.q1, {}, null);
+
+    const exported = await (await exportGet(id)).text();
+    expect(exported).not.toContain("Stay on the upgraded class through end of quarter");
+    // The interior is now empty, not the draft.
+    expect(exported).toContain("<!-- wp:answer -->\n<!-- /wp:answer -->");
+  });
+
+  it("leaves the draft untouched when the item was never answered", async () => {
+    const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    // No response submitted for q1 at all → byte-identical export.
+    const exported = await (await exportGet(id)).text();
+    expect(exported).toBe(kitchenSink);
   });
 });
 

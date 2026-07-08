@@ -28,16 +28,30 @@ export interface ReviewItemInit {
   item: Item;
   /** Prompt markdown pre-rendered to sanitized HTML on the server. */
   promptHtml: string;
+  /**
+   * Choice-option labels pre-rendered to sanitized inline HTML, aligned with
+   * `item.options` (W2). The label source string stays the canonical value used
+   * for selection + byte-fidelity; this is display-only.
+   */
+  optionLabelsHtml: string[];
   /** Persisted reviewer response, or null (then the embedded draft is used). */
   persisted: PersistedResponse | null;
   /** Parse warnings scoped to this item (e.g. multi-checked single) — §5.3. */
   warnings: Warning[];
 }
 
+/** A prose run, pre-rendered to sanitized HTML, plus its source slice (§10). */
+export interface ReviewProseSegment {
+  kind: "prose";
+  html: string;
+  /** Source-markdown slice the prose was rendered from (anchor mapping). */
+  source: string;
+  /** Absolute offset of `source` in `raw_md`. */
+  sourceStart: number;
+}
+
 /** Document content as an ordered list of prose runs and interactive items (§9). */
-export type ReviewSegment =
-  | { kind: "prose"; html: string }
-  | ({ kind: "item" } & ReviewItemInit);
+export type ReviewSegment = ReviewProseSegment | ({ kind: "item" } & ReviewItemInit);
 
 const EMPTY_DRAFT: Draft = { text: "", selected: [], other: "", status: null };
 

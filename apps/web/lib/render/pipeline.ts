@@ -36,3 +36,16 @@ const processor = unified()
 export function renderMarkdownToSafeHtml(markdown: string): string {
   return String(processor.processSync(markdown));
 }
+
+/**
+ * Render a short, single-line markdown string (a choice-option label) to
+ * sanitized *inline* HTML — the same pipeline, with the wrapping `<p>` stripped
+ * (§5.3, W2). Restores inline formatting and clickable links in option labels
+ * without introducing a block element inside the option row. Falls back to the
+ * block HTML when the input isn't a single paragraph.
+ */
+export function renderInlineMarkdownToSafeHtml(markdown: string): string {
+  const html = renderMarkdownToSafeHtml(markdown).trim();
+  const match = /^<p>([\s\S]*)<\/p>$/.exec(html);
+  return match ? match[1] : html;
+}

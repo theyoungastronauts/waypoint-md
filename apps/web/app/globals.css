@@ -118,6 +118,26 @@
   }
 }
 
+/* Selection-comment highlights (§10): a subtle, theme-aware mark that reads as
+   clickable. Applied to <mark> ranges the comment layer wraps in the prose. */
+.wp-comment-mark {
+  background-color: color-mix(in oklch, var(--chart-4) 30%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: pointer;
+  box-decoration-break: clone;
+}
+.wp-comment-mark:hover {
+  background-color: color-mix(in oklch, var(--chart-4) 45%, transparent);
+}
+
+/* Inline-rendered choice labels (W2) should not introduce block spacing. */
+.wp-prose-inline > :is(p, ul, ol, pre, blockquote) {
+  display: inline;
+  margin: 0;
+}
+
 /*
  * Reading-width prose for rendered documents (§9). Dependency-free replacement
  * for @tailwindcss/typography — the rendered HTML is already sanitized, so we

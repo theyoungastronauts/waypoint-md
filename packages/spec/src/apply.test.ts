@@ -206,6 +206,65 @@ describe("representative round-trip across every response kind + comments (§17.
   });
 });
 
+describe("explicit-empty sentinel — clearing a pre-filled draft (W1)", () => {
+  const FILLED_TEXT = [
+    '<!-- wp:question id="q1" type="text" -->',
+    "**A question.**",
+    "<!-- wp:answer -->",
+    "A pre-filled draft answer.",
+    "<!-- /wp:answer -->",
+    "<!-- /wp:question -->",
+    "",
+  ].join("\n");
+
+  it("an absent response keeps the pre-filled draft (never touched)", () => {
+    expect(applyReview(FILLED_TEXT, {})).toBe(FILLED_TEXT);
+  });
+
+  it("cleared:true empties the answer interior instead of resurrecting the draft", () => {
+    const out = applyReview(FILLED_TEXT, { responses: { q1: { cleared: true } } });
+    expect(out).toContain("<!-- wp:answer -->\n<!-- /wp:answer -->");
+    expect(out).not.toContain("A pre-filled draft answer.");
+    // A cleared answer round-trips to no embedded response.
+    expect(extractReviewState(parseDocument(out)).responses).toBeUndefined();
+  });
+
+  it("clearing an already-empty answer changes nothing but the stamp", () => {
+    const empty = [
+      '<!-- wp:question id="q1" type="text" -->',
+      "**A question.**",
+      "<!-- wp:answer -->",
+      "<!-- /wp:answer -->",
+      "<!-- /wp:question -->",
+      "",
+    ].join("\n");
+    const out = applyReview(empty, { responses: { q1: { cleared: true } } });
+    // Answer block untouched; only a frontmatter stamp was prepended.
+    expect(out).toContain("<!-- wp:answer -->\n<!-- /wp:answer -->");
+    expect(out.startsWith("---\nwaypoint_status: completed\n---\n\n")).toBe(true);
+  });
+
+  it("clears the elaboration of a choice answer", () => {
+    const doc = [
+      '<!-- wp:question id="q1" type="choice" select="single" -->',
+      "**Pick:**",
+      "- [ ] Alpha",
+      "<!-- wp:answer -->",
+      "An old elaboration draft.",
+      "<!-- /wp:answer -->",
+      "<!-- /wp:question -->",
+      "",
+    ].join("\n");
+    const out = applyReview(doc, { responses: { q1: { selected: [], cleared: true } } });
+    expect(out).not.toContain("An old elaboration draft.");
+    expect(out).toContain("<!-- wp:answer -->\n<!-- /wp:answer -->");
+  });
+
+  it("a cleared response for a non-existent item leaves the source byte-identical", () => {
+    expect(applyReview(FILLED_TEXT, { responses: { phantom: { cleared: true } } })).toBe(FILLED_TEXT);
+  });
+});
+
 describe("descending-order splices never corrupt earlier spans", () => {
   it("applies many edits to one document with untouched prose intact", () => {
     const raw = fixture("kitchen-sink.md");

@@ -2,7 +2,7 @@ import type { ResponseStatus, ResponseValue, Warning } from "@waypoint/spec";
 import type { PersistedResponse, ReviewSegment } from "@/components/review/types";
 import type { ItemDetail } from "../documents";
 import { renderDocument } from "./document";
-import { renderMarkdownToSafeHtml } from "./pipeline";
+import { renderInlineMarkdownToSafeHtml, renderMarkdownToSafeHtml } from "./pipeline";
 
 export interface ReviewRender {
   /** Prose + interactive-item segments in document order (§9). */
@@ -34,7 +34,12 @@ export function renderReviewDocument(rawMd: string, dbItems: ItemDetail[]): Revi
 
   for (const segment of base.segments) {
     if (segment.kind === "prose") {
-      segments.push({ kind: "prose", html: segment.html });
+      segments.push({
+        kind: "prose",
+        html: segment.html,
+        source: segment.source,
+        sourceStart: segment.sourceStart,
+      });
       continue;
     }
 
@@ -48,6 +53,7 @@ export function renderReviewDocument(rawMd: string, dbItems: ItemDetail[]): Revi
       itemId: db?.id ?? "",
       item: spec,
       promptHtml: renderMarkdownToSafeHtml(spec.promptMd),
+      optionLabelsHtml: (spec.options ?? []).map((o) => renderInlineMarkdownToSafeHtml(o.label)),
       persisted: toPersisted(db?.response ?? null),
       warnings,
     });

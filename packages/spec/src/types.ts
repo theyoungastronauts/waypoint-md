@@ -177,6 +177,14 @@ export interface ResponseValue {
   selected?: string[];
   other?: string;
   status?: ResponseStatus;
+  /**
+   * Explicit-empty sentinel (W1). When true, the reviewer deliberately emptied a
+   * pre-filled `wp:answer` draft: {@link applyReview} writes an empty answer
+   * interior instead of leaving the source draft in place. This distinguishes
+   * "cleared" from "never touched" (an absent response), which keeps the source
+   * draft. Only ever set on export input — the parser never emits it.
+   */
+  cleared?: boolean;
 }
 
 /** A reviewer-authored comment to splice into the export (§5.4). */

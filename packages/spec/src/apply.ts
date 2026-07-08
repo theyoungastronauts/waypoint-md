@@ -7,6 +7,7 @@
  * applies them in descending order, so earlier edits never shift later spans:
  *
  *   - replace the interior of a `wp:answer` block with the response text;
+ *   - clear a `wp:answer` interior when the reviewer explicitly emptied it (W1);
  *   - flip `[ ]`/`[x]` checkbox markers to match the selection;
  *   - write the `status` attribute on the answer-open comment;
  *   - insert `wp:comment` blocks after the source block that contains the anchor;
@@ -17,11 +18,8 @@
 
 import { parseInternal, reviewIsEmpty } from "./parse.js";
 import { encodeAttr } from "./html.js";
+import { capCommentAnchor } from "./anchor.js";
 import type { Item, ResponseValue, ReviewComment, ReviewState, Span } from "./types.js";
-
-/** Caps from §5.4. */
-const PREFIX_SUFFIX_CAP = 32;
-const EXACT_CAP = 200;
 
 interface Splice {
   start: number;
@@ -38,14 +36,28 @@ export function applyReview(raw: string, review: ReviewState): string {
   const eol = raw.includes("\r\n") ? "\r\n" : "\n";
   const splices: Splice[] = [];
 
+  // Only stamp the frontmatter when the review materially touches the document:
+  // a response for an item that actually exists, or at least one comment. A
+  // response keyed to a `wp_id` that isn't in the doc (a phantom) must leave the
+  // source byte-identical — no splice, no stamp.
+  let material = false;
+
   const responses = review.responses ?? {};
   for (const item of parsed.items) {
     const response = responses[item.wpId];
-    if (response) collectItemSplices(raw, item, response, eol, splices);
+    if (response) {
+      material = true;
+      collectItemSplices(raw, item, response, eol, splices);
+    }
   }
 
-  collectCommentSplices(raw, review.comments ?? [], parsed.analysis.blocks, eol, splices);
-  collectFrontmatterStamp(raw, parsed.spans.frontmatter, eol, review, splices);
+  const comments = review.comments ?? [];
+  if (comments.length > 0) material = true;
+  collectCommentSplices(raw, comments, parsed.analysis.blocks, eol, splices);
+
+  if (material) {
+    collectFrontmatterStamp(raw, parsed.spans.frontmatter, eol, review, splices);
+  }
 
   return applySplices(raw, splices);
 }
@@ -53,11 +65,20 @@ export function applyReview(raw: string, review: ReviewState): string {
 function collectItemSplices(raw: string, item: Item, response: ResponseValue, eol: string, splices: Splice[]): void {
   // 1. Answer interior — the free-text answer (text Q) or elaboration (choice Q).
   const content = item.type === "text" ? response.text : response.other;
-  if (item.spans.answerInterior && typeof content === "string" && content.trim().length > 0) {
+  const hasContent = typeof content === "string" && content.trim().length > 0;
+  if (item.spans.answerInterior && hasContent) {
     const interior = item.spans.answerInterior;
     const desired = `${eol}${content}${eol}`;
     if (raw.slice(interior.start, interior.end) !== desired) {
       splices.push({ start: interior.start, end: interior.end, replacement: desired });
+    }
+  } else if (item.spans.answerInterior && response.cleared) {
+    // W1 — explicit-empty sentinel: the reviewer emptied a pre-filled draft. Only
+    // act when there is real draft text to remove, so an already-empty answer
+    // block stays byte-identical. Normalizes the interior to a single newline.
+    const interior = item.spans.answerInterior;
+    if (raw.slice(interior.start, interior.end).trim().length > 0) {
+      splices.push({ start: interior.start, end: interior.end, replacement: eol });
     }
   }
 
@@ -126,18 +147,12 @@ function anchorInsertionOffset(raw: string, comment: ReviewComment, blocks: read
 }
 
 function serializeComment(comment: ReviewComment, eol: string): string {
-  const { anchor } = comment;
-  let exact = anchor.exact;
-  let exactHash = anchor.exactHash;
-  if (exact.length > EXACT_CAP) {
-    exactHash = exactHash ?? hashExact(exact);
-    exact = exact.slice(0, EXACT_CAP);
-  }
+  const anchor = capCommentAnchor(comment.anchor);
 
-  let attrs = `id="${encodeAttr(comment.id)}" exact="${encodeAttr(exact)}"`;
-  if (anchor.prefix) attrs += ` prefix="${encodeAttr(anchor.prefix.slice(0, PREFIX_SUFFIX_CAP))}"`;
-  if (anchor.suffix) attrs += ` suffix="${encodeAttr(anchor.suffix.slice(0, PREFIX_SUFFIX_CAP))}"`;
-  if (exactHash) attrs += ` exact-hash="${encodeAttr(exactHash)}"`;
+  let attrs = `id="${encodeAttr(comment.id)}" exact="${encodeAttr(anchor.exact)}"`;
+  if (anchor.prefix) attrs += ` prefix="${encodeAttr(anchor.prefix)}"`;
+  if (anchor.suffix) attrs += ` suffix="${encodeAttr(anchor.suffix)}"`;
+  if (anchor.exactHash) attrs += ` exact-hash="${encodeAttr(anchor.exactHash)}"`;
 
   const lines = [`<!-- wp:comment ${attrs} -->`, comment.bodyMd];
   if (comment.suggestionMd !== undefined) {
@@ -145,20 +160,6 @@ function serializeComment(comment: ReviewComment, eol: string): string {
   }
   lines.push("<!-- /wp:comment -->");
   return lines.join(eol);
-}
-
-/**
- * Small non-cryptographic hash (FNV-1a, 32-bit) for the `exact-hash` fallback
- * on selections over the 200-char cap. Only needs to be deterministic and
- * collision-resistant enough to disambiguate anchors — not secure.
- */
-function hashExact(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function collectFrontmatterStamp(

@@ -64,13 +64,32 @@ describe("buildReviewState", () => {
     });
   });
 
-  it("skips empty, wp_id-less, and synthetic items", () => {
+  it("skips wp_id-less and synthetic items entirely", () => {
     const state = buildReviewState(
       detail([
         item({ id: "a", wpId: null, response: { value: { text: "orphan" }, status: null, updatedAt: "" } }),
-        item({ id: "b", wpId: "q2", response: { value: { text: "  " }, status: null, updatedAt: "" } }),
         item({ id: "c", wpId: "q3", synthetic: true, response: { value: { text: "syn" }, status: "answered", updatedAt: "" } }),
       ]),
+      "t",
+    );
+    expect(state.responses).toBeUndefined();
+  });
+
+  it("marks an empty-content response row as cleared (W1), never dropping it", () => {
+    const state = buildReviewState(
+      detail([
+        // A response row exists but carries no content: the reviewer emptied a
+        // pre-filled draft. It must export as an explicit clear, not vanish.
+        item({ id: "b", wpId: "q2", response: { value: { text: "  " }, status: null, updatedAt: "" } }),
+      ]),
+      "t",
+    );
+    expect(state.responses).toEqual({ q2: { text: "  ", cleared: true } });
+  });
+
+  it("leaves a never-touched item (no response row) out of the review state", () => {
+    const state = buildReviewState(
+      detail([item({ id: "b", wpId: "q2", response: null })]),
       "t",
     );
     expect(state.responses).toBeUndefined();
