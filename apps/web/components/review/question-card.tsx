@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
@@ -18,9 +18,17 @@ const textareaClass =
  * never drops the last keystroke.
  */
 export function QuestionCard({ itemId }: { itemId: string }) {
-  const { getDraft, saveContent } = useResponses();
+  const { getDraft, saveContent, externalRev } = useResponses();
   const { setFocused } = useFocus();
   const [text, setText] = useState(() => getDraft(itemId).text);
+
+  // Re-seed from the store when the answer is edited externally (§14 insert).
+  const rev = externalRev(itemId);
+  useEffect(() => {
+    if (rev > 0) setText(getDraft(itemId).text);
+    // getDraft is stable; re-run only when the external revision changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rev]);
 
   const save = useDebouncedCallback((next: string) => saveContent(itemId, { text: next }), AUTOSAVE_DELAY_MS);
 

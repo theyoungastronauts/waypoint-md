@@ -93,6 +93,26 @@ export function draftToValue(draft: Draft): ResponseValue {
   return value;
 }
 
+/** How an "insert into answer" applies model text to the current draft (§14). */
+export type InsertMode = "append" | "replace";
+
+/**
+ * Merge assistant text into the answer field of a draft (§14 "insert into
+ * answer"). Text items receive it in `text`; choice items receive it in the
+ * elaboration (`other`) field — a selection is never overwritten by prose.
+ * `append` adds after the existing answer (blank line separated); `replace`, or
+ * appending into an empty field, sets the field outright. Pure — tested directly.
+ */
+export function applyInsert(current: Draft, type: ItemType, text: string, mode: InsertMode): Draft {
+  const field: "text" | "other" = type === "text" ? "text" : "other";
+  const base = current[field];
+  const next =
+    mode === "replace" || base.trim().length === 0
+      ? text
+      : `${base.replace(/\s+$/, "")}\n\n${text}`;
+  return { ...current, [field]: next };
+}
+
 /** The autosave request body for an item (§8). */
 export interface ResponsePutBody {
   value: { text?: string; selected?: string[]; other?: string };

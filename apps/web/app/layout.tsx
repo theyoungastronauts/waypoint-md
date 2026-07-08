@@ -42,6 +42,9 @@ export default function RootLayout({
                     <Link href="/new" className="text-muted-foreground hover:text-foreground">
                       New
                     </Link>
+                    <Link href="/settings" className="text-muted-foreground hover:text-foreground">
+                      Settings
+                    </Link>
                   </nav>
                 </div>
               </header>

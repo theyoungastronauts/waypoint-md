@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { AgentProvider, type AgentMessage } from "./agent-store";
 import { CommentableProse } from "./commentable-prose";
 import { CommentLayer } from "./comment-layer";
 import { CommentsProvider, type CommentView, type ProseSource } from "./comments-store";
@@ -25,10 +26,16 @@ export function ReviewView({
   docId,
   segments,
   comments,
+  aiEnabled,
+  initialChat,
 }: {
   docId: string;
   segments: ReviewSegment[];
   comments: CommentView[];
+  /** Server-driven capability flag (§14): whether the AI sidebar renders. */
+  aiEnabled: boolean;
+  /** The persisted chat thread for this document (empty when AI is off). */
+  initialChat: AgentMessage[];
 }) {
   const router = useRouter();
   const [showSummary, setShowSummary] = useState(false);
@@ -68,6 +75,7 @@ export function ReviewView({
     <CommentsProvider docId={docId} initialComments={comments} proseSources={proseSources}>
       <ResponsesProvider inits={inits}>
         <FocusProvider>
+          <AgentProvider docId={docId} enabled={aiEnabled} initialMessages={initialChat}>
           {completed && (
             <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400">
               Review marked completed. You can keep editing and download the annotated file anytime.
@@ -109,6 +117,7 @@ export function ReviewView({
           />
 
           <CommentLayer />
+          </AgentProvider>
         </FocusProvider>
       </ResponsesProvider>
     </CommentsProvider>

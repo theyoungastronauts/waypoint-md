@@ -1,7 +1,7 @@
 "use client";
 
 import type { Item } from "@waypoint/spec";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
@@ -28,13 +28,20 @@ export function ChoiceGroup({
   item: Item;
   optionLabelsHtml: string[];
 }) {
-  const { getDraft, saveContent } = useResponses();
+  const { getDraft, saveContent, externalRev } = useResponses();
   const { setFocused } = useFocus();
   const multi = item.select === "multi";
   const options = item.options ?? [];
 
   const [selected, setSelected] = useState<string[]>(() => getDraft(itemId).selected);
   const [other, setOther] = useState(() => getDraft(itemId).other);
+
+  // Re-seed the elaboration field when it is edited externally (§14 insert).
+  const rev = externalRev(itemId);
+  useEffect(() => {
+    if (rev > 0) setOther(getDraft(itemId).other);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rev]);
 
   const saveOther = useDebouncedCallback(
     (next: string) => saveContent(itemId, { other: next }),

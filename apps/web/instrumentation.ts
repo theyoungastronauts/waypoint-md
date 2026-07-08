@@ -6,6 +6,11 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Pull in the repo-root `.env` (ANTHROPIC_API_KEY, dev overrides) before
+    // anything reads process.env — Next only auto-loads apps/web/.env (§14).
+    const { loadRepoEnv } = await import("./lib/env");
+    loadRepoEnv();
+
     const { runMigrations } = await import("./lib/db/migrate");
     runMigrations();
 

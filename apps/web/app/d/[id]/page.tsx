@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { WarningsBanner } from "@/components/document/warnings-banner";
 import { ReviewView } from "@/components/review/review-view";
 import { Badge } from "@/components/ui/badge";
+import { aiEnabled } from "@/lib/ai/config";
+import { listChatMessages } from "@/lib/chat";
 import { getDocumentDetail } from "@/lib/documents";
 import { relativeTime, sourceLabel, statusMeta } from "@/lib/format";
 import { renderReviewDocument } from "@/lib/render/review";
@@ -29,6 +31,12 @@ export default async function DocumentPage({ params }: DocPageProps) {
 
   const { segments, docWarnings } = renderReviewDocument(doc.rawMd, doc.items);
   const status = statusMeta(doc.status);
+
+  // Server-driven AI capability (§14): the sidebar only renders with a key.
+  const ai = aiEnabled();
+  const initialChat = ai
+    ? listChatMessages(doc.id).map((m) => ({ id: m.id, role: m.role, content: m.content }))
+    : [];
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4">
@@ -62,6 +70,8 @@ export default async function DocumentPage({ params }: DocPageProps) {
       <ReviewView
         docId={doc.id}
         segments={segments}
+        aiEnabled={ai}
+        initialChat={initialChat}
         comments={doc.comments.map((c) => ({
           id: c.id,
           anchor: c.anchor,

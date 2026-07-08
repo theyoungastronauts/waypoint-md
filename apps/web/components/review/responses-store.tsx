@@ -19,10 +19,12 @@ import {
   type Progress,
 } from "@/lib/review-status";
 import {
+  applyInsert,
   draftToBody,
   draftToValue,
   initialDraft,
   type Draft,
+  type InsertMode,
   type ReviewItemInit,
 } from "./types";
 
@@ -50,6 +52,14 @@ interface ResponsesApi {
    * The caller owns debouncing (text edits) vs. immediacy (checkbox clicks).
    */
   saveContent: (itemId: string, patch: ContentPatch) => void;
+  /**
+   * Insert assistant text into the focused item's answer field and autosave
+   * (§14). Bumps the item's external revision so the card re-seeds its local
+   * textarea from the store rather than clobbering the insert on next keystroke.
+   */
+  insertIntoAnswer: (itemId: string, text: string, mode: InsertMode) => void;
+  /** A monotonically-increasing counter bumped on each external edit of an item. */
+  externalRev: (itemId: string) => number;
   toggleFlag: (itemId: string) => void;
   toggleSkip: (itemId: string) => void;
   statusOf: (itemId: string) => EffectiveStatus;
@@ -62,21 +72,30 @@ const ResponsesContext = createContext<ResponsesApi | null>(null);
 interface StoreState {
   drafts: Record<string, Draft>;
   save: Record<string, SaveStatus>;
+  /** Per-item external-edit counter — cards re-seed local state when it changes. */
+  rev: Record<string, number>;
 }
 
 type Action =
   | { kind: "commit"; itemId: string; draft: Draft }
-  | { kind: "save"; itemId: string; status: SaveStatus };
+  | { kind: "save"; itemId: string; status: SaveStatus }
+  | { kind: "bumpRev"; itemId: string };
 
 function reducer(state: StoreState, action: Action): StoreState {
   switch (action.kind) {
     case "commit":
       return {
+        ...state,
         drafts: { ...state.drafts, [action.itemId]: action.draft },
         save: { ...state.save, [action.itemId]: "saving" },
       };
     case "save":
       return { ...state, save: { ...state.save, [action.itemId]: action.status } };
+    case "bumpRev":
+      return {
+        ...state,
+        rev: { ...state.rev, [action.itemId]: (state.rev[action.itemId] ?? 0) + 1 },
+      };
   }
 }
 
@@ -119,6 +138,7 @@ export function ResponsesProvider({
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
     drafts: initialDrafts,
     save: {} as Record<string, SaveStatus>,
+    rev: {} as Record<string, number>,
   }));
 
   // Timers that fade a "saved" tick back to idle; cleared on unmount.
@@ -191,6 +211,18 @@ export function ResponsesProvider({
     [getDraft, saveResponse],
   );
 
+  const insertIntoAnswer = useCallback(
+    (itemId: string, text: string, mode: InsertMode) => {
+      const current = getDraft(itemId);
+      const merged = applyInsert(current, typeById[itemId], text, mode);
+      merged.status = statusAfterContentChange(current.status, responseHasContent(draftToValue(merged)));
+      saveResponse(itemId, merged);
+      // Signal the card to re-seed its uncontrolled textarea from the new draft.
+      dispatch({ kind: "bumpRev", itemId });
+    },
+    [getDraft, typeById, saveResponse],
+  );
+
   const toggleStatus = useCallback(
     (itemId: string, target: "flagged" | "skipped") => {
       const draft = getDraft(itemId);
@@ -210,13 +242,15 @@ export function ResponsesProvider({
       getDraft,
       getSave: (itemId) => state.save[itemId] ?? "idle",
       saveContent,
+      insertIntoAnswer,
+      externalRev: (itemId) => state.rev[itemId] ?? 0,
       toggleFlag: (itemId) => toggleStatus(itemId, "flagged"),
       toggleSkip: (itemId) => toggleStatus(itemId, "skipped"),
       statusOf,
       progress: computeProgress(order.map((m) => statusOf(m.itemId))),
       order,
     };
-  }, [state.drafts, state.save, getDraft, saveContent, toggleStatus, order]);
+  }, [state.drafts, state.save, state.rev, getDraft, saveContent, insertIntoAnswer, toggleStatus, order]);
 
   return <ResponsesContext.Provider value={api}>{children}</ResponsesContext.Provider>;
 }

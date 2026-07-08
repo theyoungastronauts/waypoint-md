@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAgent } from "./agent-store";
 import { ProgressRing } from "./progress-ring";
 import { ReviewRail } from "./review-rail";
 import { useResponses } from "./responses-store";
@@ -15,7 +15,9 @@ import { useResponses } from "./responses-store";
  */
 export function MobileSheet({ docId, onFinish }: { docId: string; onFinish: () => void }) {
   const { progress } = useResponses();
-  const [open, setOpen] = useState(false);
+  // Sheet-open lives in the agent store so "explain this question" can open the
+  // sheet (and switch to the agent tab) from a card on mobile (§14).
+  const { sheetOpen: open, setSheetOpen: setOpen } = useAgent();
 
   return (
     <div className="lg:hidden">

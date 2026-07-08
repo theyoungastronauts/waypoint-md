@@ -8,6 +8,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "apps/web"),
     },
   },
+  // Use React's automatic JSX runtime so component tests don't need `import React`
+  // (matches how Next transforms the app's .tsx files).
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "react",
+  },
   test: {
     include: [
       "packages/*/src/**/*.{test,spec}.ts",

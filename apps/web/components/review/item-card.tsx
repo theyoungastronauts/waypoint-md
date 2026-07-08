@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { STATUS_DOT, STATUS_LABEL } from "@/lib/review-status";
+import { useAgent } from "./agent-store";
 import { ChoiceGroup } from "./choice-group";
 import { useFocus } from "./focus-context";
 import { Prose } from "./prose";
@@ -24,6 +25,7 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
   const { item, itemId, promptHtml, optionLabelsHtml, warnings } = init;
   const { focusedId, setFocused, register } = useFocus();
   const { getSave, statusOf, toggleFlag, toggleSkip } = useResponses();
+  const { enabled: aiEnabled, explain } = useAgent();
 
   const status = statusOf(itemId);
   const draft = getSave(itemId);
@@ -109,6 +111,15 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
         >
           {skipped ? "Skipped" : "Skip"}
         </button>
+        {aiEnabled && (
+          <button
+            type="button"
+            onClick={() => explain(itemId)}
+            className="rounded-md border border-border px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-accent"
+          >
+            Explain
+          </button>
+        )}
         <span className="text-muted-foreground/70">
           {flagged ? "Marked to revisit later." : skipped ? "Skipped for now." : "Flag to revisit, or skip."}
         </span>
