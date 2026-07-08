@@ -63,22 +63,29 @@ pnpm build
 ```
 
 Then start the standalone server. Next.js `output: 'standalone'` means `next
-start` is **not** the right command; run the built server directly, and point it
-at the committed migrations folder (the standalone server runs from a different
-cwd, so `./drizzle` is not beside it):
+start` is **not** the right command; run the built server directly. Two things
+the standalone output does not include on its own:
+
+- **static assets** — `next build` leaves CSS/JS in `apps/web/.next/static`,
+  but the standalone server only serves what sits beside `server.js`. Skip the
+  copy and every page renders unstyled.
+- **migrations** — the standalone server runs from a different cwd, so
+  `./drizzle` is not beside it; without `WAYPOINT_MIGRATIONS_DIR` the boot
+  migration fails with `Can't find meta/_journal.json`.
 
 ```bash
-# from the repo root
+# from the repo root — copy assets once per build, then start
+cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+cp -r apps/web/public apps/web/.next/standalone/apps/web/public
+
 WAYPOINT_MIGRATIONS_DIR="$PWD/apps/web/drizzle" \
 WAYPOINT_DATA_DIR="$PWD/.waypoint-data" \
   node apps/web/.next/standalone/apps/web/server.js
 # open http://localhost:3000
 ```
 
-`WAYPOINT_MIGRATIONS_DIR` must point at `apps/web/drizzle` (or you can copy that
-folder beside `server.js`); without it the boot migration fails with
-`Can't find meta/_journal.json`. For local development with hot reload, use
-`pnpm dev` instead (runs `next dev`, which finds `./drizzle` from `apps/web`).
+For local development with hot reload, use `pnpm dev` instead (runs
+`next dev`, which serves assets itself and finds `./drizzle` from `apps/web`).
 
 ## Environment variables (§16)
 
