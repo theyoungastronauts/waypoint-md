@@ -27,7 +27,7 @@ export function ReviewRail({
   const { enabled, tab, setTab } = useAgent();
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
       {enabled && (
         <div className="flex gap-1 rounded-lg border border-border p-1" role="tablist">
           {(["items", "agent"] as const).map((t) => (

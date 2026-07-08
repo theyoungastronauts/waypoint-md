@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { renderMarkdownToSafeHtml } from "@/lib/render/pipeline";
 import { cn } from "@/lib/utils";
 import { useAgent, type AgentMessage } from "./agent-store";
 import { useFocus } from "./focus-context";
@@ -9,8 +10,10 @@ import { useResponses } from "./responses-store";
 /**
  * The document-scoped chat surface in the right rail (§14). Streams assistant
  * replies, offers a per-message "insert into answer" that targets the focused
- * item, and takes new turns. Model output is rendered as plain text (never
- * HTML) so a reply can't inject markup into the review view.
+ * item, and takes new turns. Assistant markdown renders through the same
+ * rehype-sanitize pipeline as document prose — model output is untrusted, so
+ * it gets the identical allowlist, never raw HTML. Insert-into-answer keeps
+ * the raw markdown text (answers are markdown).
  */
 export function AgentPanel() {
   const { messages, streaming, error, send, stop } = useAgent();
@@ -31,7 +34,7 @@ export function AgentPanel() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -108,10 +111,17 @@ function MessageBubble({ message, streaming }: { message: AgentMessage; streamin
           isUser ? "bg-primary text-primary-foreground" : "border border-border bg-card",
         )}
       >
-        <p className="whitespace-pre-wrap break-words">
-          {message.content}
-          {streaming && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
-        </p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        ) : (
+          <div
+            className="wp-prose break-words text-sm"
+            // Sanitized by the shared rehype-sanitize pipeline — same allowlist
+            // as document prose, so a model reply can't inject live markup.
+            dangerouslySetInnerHTML={{ __html: renderMarkdownToSafeHtml(message.content) }}
+          />
+        )}
+        {streaming && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
         {!isUser && !streaming && message.content.length > 0 && <InsertControls text={message.content} />}
       </div>
     </div>

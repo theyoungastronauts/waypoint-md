@@ -115,7 +115,10 @@ export function ReviewView({
               <UnanchoredComments />
             </article>
 
-            <aside className="hidden lg:sticky lg:top-20 lg:block lg:max-h-[calc(100vh-6rem)]">
+            {/* flex-col + overflow-hidden give the rail a real height bound, so the
+                chat/items panels can scroll internally instead of clipping at the
+                viewport; without them h-full never resolves against max-h. */}
+            <aside className="hidden lg:sticky lg:top-20 lg:flex lg:max-h-[calc(100vh-6rem)] lg:flex-col lg:overflow-hidden">
               <ReviewRail docId={docId} onFinish={() => setShowSummary(true)} />
             </aside>
           </div>
