@@ -9,6 +9,7 @@ import { runStatus } from "./commands/status";
 import { runPull } from "./commands/pull";
 import { runOpen } from "./commands/open";
 import { runConfigGet, runConfigSet } from "./commands/config";
+import { runSkillInstall } from "./commands/skill";
 
 /** Build resolved command deps from the shared `--url` / `--project` options. */
 function deps(flags: ConfigFlags, io: IO): CommandDeps {
@@ -107,6 +108,13 @@ export function createProgram(version: string, io: IO = consoleIo): Command {
     .action(async (id: string | undefined, opts: CommonOpts) => {
       await runOpen(id, deps(opts, io));
     });
+
+  const skill = program.command("skill").description("Manage the bundled Claude Code skill");
+  skill
+    .command("install")
+    .description("Install the /waypoint skill (project-local by default) without initializing a project")
+    .option("--global", "install to ~/.claude/skills instead of ./.claude/skills")
+    .action((opts: { global?: boolean }) => runSkillInstall({ global: opts.global }, io));
 
   const config = program.command("config").description("Get or set CLI configuration");
   config

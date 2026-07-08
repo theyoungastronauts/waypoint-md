@@ -174,6 +174,19 @@ into the repo at `.claude/skills/waypoint/` (or `~/.claude/skills/waypoint/` wit
 `--global`). That's it — `/waypoint` is available, and Claude loads it
 automatically when you produce something worth reviewing.
 
+The skill can also be installed on its own — entirely optional, useful when you
+want it available without initializing the current directory as a Waypoint
+project:
+
+```bash
+waypoint skill install            # this repo only (./.claude/skills/waypoint/)
+waypoint skill install --global   # every project (~/.claude/skills/waypoint/)
+```
+
+Re-running either overwrites in place, so it doubles as the upgrade path after
+updating the CLI. (`waypoint init --no-skill` is the inverse: project setup with
+no skill.)
+
 **Polaris.** Polaris's `enable waypoint` pulls this same `skills/waypoint/` folder
 **pinned to a Waypoint release tag**. Waypoint's obligation is only to keep a
 stable, tagged path: `skills/waypoint/` at a git tag like `v1.0.0`. The pull hook
