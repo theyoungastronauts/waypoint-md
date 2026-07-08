@@ -125,8 +125,20 @@ plain HTTP — so the session cookie is not `Secure` by default. Only set
 
 ## CLI usage
 
-The CLI is published to npm as **`waypoint-md`**; the binary is `waypoint`. Run it
-with `npx waypoint-md <command>` or install it globally.
+The CLI's npm name is **`waypoint-md`**; the binary is `waypoint`. Once published
+(see [Releasing](#releasing)), run it with `npx waypoint-md <command>` or install
+it globally with `npm i -g waypoint-md`.
+
+**Until then — or when working from a clone — link it from source:**
+
+```bash
+pnpm --filter waypoint-md build
+(cd packages/cli && npm link)   # puts `waypoint` on your PATH
+```
+
+The link is a symlink into `packages/cli`, so a rebuild updates the global
+command in place. (`npm link` installs into the active Node version's bin —
+re-run it if you switch versions with nvm.)
 
 ```bash
 # one-time, in a repo: write .waypoint.json, ignore the pointer dir, install the skill
