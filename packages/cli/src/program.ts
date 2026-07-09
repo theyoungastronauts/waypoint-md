@@ -1,10 +1,11 @@
 import { Command } from "commander";
 
 import { resolveConfig, type ConfigFlags } from "./config";
-import { consoleIo, type IO } from "./io";
+import { CliError, consoleIo, type IO } from "./io";
 import type { CommandDeps } from "./commands/push";
 import { runInit } from "./commands/init";
 import { runPush } from "./commands/push";
+import { runPublish, runBackfill } from "./commands/publish";
 import { runStatus } from "./commands/status";
 import { runPull } from "./commands/pull";
 import { runOpen } from "./commands/open";
@@ -76,6 +77,24 @@ export function createProgram(version: string, io: IO = consoleIo): Command {
     .option("--flush", "retry any queued (offline) pushes")
     .action(async (file: string | undefined, opts: CommonOpts & { title?: string; flush?: boolean }) => {
       await runPush(file, { title: opts.title, flush: opts.flush }, deps(opts, io));
+    });
+
+  program
+    .command("publish")
+    .description("Render a markdown file to HTML + PDF, upload to R2, and index it")
+    .argument("[file]", "path to the markdown file")
+    .option("-u, --url <url>", "server URL")
+    .option("-t, --title <title>", "document title")
+    .option("--backfill", "index existing R2 objects into the registry instead of publishing")
+    .action(async (file: string | undefined, opts: CommonOpts & { title?: string; backfill?: boolean }) => {
+      if (opts.backfill) {
+        await runBackfill(deps(opts, io));
+        return;
+      }
+      if (!file) {
+        throw new CliError("Nothing to publish. Provide a <file>, or use --backfill.");
+      }
+      await runPublish(file, { title: opts.title }, deps(opts, io));
     });
 
   program

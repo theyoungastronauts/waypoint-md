@@ -64,6 +64,26 @@ export interface HealthInfo {
   specVersion: string;
 }
 
+/** Body posted to `POST /api/publications` for `waypoint publish`. */
+export interface PublishPayload {
+  markdown: string;
+  filename?: string;
+  title?: string;
+  /** Marks this as a CLI publish (origin = cli) and records the host. */
+  source: { host: string };
+}
+
+export interface PublishResult {
+  id: string;
+  title: string;
+  urls: { html: string; pdf: string; md: string };
+}
+
+export interface BackfillResult {
+  indexed: number;
+  skipped: number;
+}
+
 export interface ExportFile {
   filename: string;
   body: string;
@@ -119,6 +139,25 @@ export async function pushDocument(config: ResolvedConfig, payload: PushPayload)
   });
   if (!res.ok) throw await toApiError(res);
   return (await res.json()) as PushResult;
+}
+
+export async function publishDocument(config: ResolvedConfig, payload: PublishPayload): Promise<PublishResult> {
+  const res = await doFetch(`${config.url}/api/publications`, {
+    method: "POST",
+    headers: headers(config, { "content-type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as PublishResult;
+}
+
+export async function backfillPublications(config: ResolvedConfig): Promise<BackfillResult> {
+  const res = await doFetch(`${config.url}/api/publications/backfill`, {
+    method: "POST",
+    headers: headers(config),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as BackfillResult;
 }
 
 export async function listDocuments(config: ResolvedConfig): Promise<DocumentSummary[]> {

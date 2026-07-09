@@ -31,7 +31,8 @@
       "better-sqlite3",
       "esbuild",
       "@tailwindcss/oxide",
-      "sharp"
+      "sharp",
+      "puppeteer"
     ]
   }
 }

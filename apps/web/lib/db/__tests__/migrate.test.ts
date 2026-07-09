@@ -8,7 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
  * Exercises the migration bootstrap directly (the same drizzle folder the app
- * runs on boot): a fresh SQLite file must come up with all seven §6 tables.
+ * runs on boot): a fresh SQLite file must come up with the seven §6 tables plus
+ * the publish feature's `publications` table and its FTS5 index + sync triggers.
  */
 const EXPECTED_TABLES = [
   "projects",
@@ -18,7 +19,10 @@ const EXPECTED_TABLES = [
   "comments",
   "chat_messages",
   "settings",
+  "publications",
 ];
+
+const EXPECTED_TRIGGERS = ["publications_fts_ai", "publications_fts_ad", "publications_fts_au"];
 
 const migrationsFolder = path.join(import.meta.dirname, "..", "..", "..", "drizzle");
 
@@ -38,7 +42,7 @@ describe("database migrations", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("creates all seven §6 tables on a fresh boot", () => {
+  it("creates the core tables plus publications on a fresh boot", () => {
     const rows = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all() as Array<{ name: string }>;
@@ -46,6 +50,21 @@ describe("database migrations", () => {
 
     for (const table of EXPECTED_TABLES) {
       expect(names).toContain(table);
+    }
+  });
+
+  it("creates the publications FTS index and its content-sync triggers", () => {
+    const ftsRows = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'publications_fts'")
+      .all() as Array<{ name: string }>;
+    expect(ftsRows).toHaveLength(1);
+
+    const triggers = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+      .all() as Array<{ name: string }>;
+    const names = triggers.map((t) => t.name);
+    for (const trigger of EXPECTED_TRIGGERS) {
+      expect(names).toContain(trigger);
     }
   });
 });

@@ -110,3 +110,35 @@ export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+/**
+ * The publications registry (Phase B — `publish`). Unlike `documents` (a
+ * pending → pulled review lifecycle), a publication is a permanent static
+ * artifact: the source markdown is rendered to HTML + PDF, uploaded to R2, and
+ * served from the bucket forever with Waypoint never in the serving path. Only
+ * the source markdown + metadata live here — the HTML/PDF bytes stay on R2 and
+ * are never duplicated in the DB.
+ *
+ * `id` is the R2 folder uuid: `r2_folder` is always `smitty/shares/<id>`, so
+ * backfill is idempotent by primary key. The three object keys and public URLs
+ * derive from `r2_folder + sanitized_name + public_base`. A companion
+ * `publications_fts` FTS5 virtual table (raw-SQL migration, trigger-synced)
+ * indexes `(title, source_md)` for the registry search.
+ */
+export const publications = sqliteTable("publications", {
+  id: id(),
+  title: text("title").notNull(),
+  sanitizedName: text("sanitized_name").notNull(),
+  sourceMd: text("source_md").notNull(),
+  /** `smitty/shares/<id>` — the immutable object prefix for this publication. */
+  r2Folder: text("r2_folder").notNull(),
+  /** The public domain at publish time (e.g. `dropzone.tylersavery.com`). */
+  publicBase: text("public_base").notNull(),
+  /** cli | api | backfill */
+  origin: text("origin").notNull(),
+  /** Host that published (from the CLI); null for API/backfill origins. */
+  sourceHost: text("source_host"),
+  createdAt: createdAt(),
+  /** Set when the R2 objects are deleted; the registry row itself survives. */
+  revokedAt: text("revoked_at"),
+});
