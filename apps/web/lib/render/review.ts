@@ -59,6 +59,7 @@ export function renderReviewDocument(rawMd: string, dbItems: ItemDetail[]): Revi
       optionLabelsHtml: (spec.options ?? []).map((o) => renderInlineMarkdownToSafeHtml(o.label)),
       rationaleHtml: spec.rationale ? renderMarkdownToSafeHtml(spec.rationale) : undefined,
       persisted: toPersisted(db?.response ?? null),
+      attachments: (db?.attachments ?? []).map((a) => ({ id: a.id, filename: a.filename, mime: a.mime })),
       warnings,
     });
   }
@@ -112,6 +113,7 @@ export function buildSyntheticInits(dbItems: ItemDetail[]): ReviewItemInit[] {
         promptHtml: renderMarkdownToSafeHtml(db.promptMd ?? ""),
         optionLabelsHtml: options.map((o) => renderInlineMarkdownToSafeHtml(o.label)),
         persisted: toPersisted(db.response ?? null),
+        attachments: db.attachments.map((a) => ({ id: a.id, filename: a.filename, mime: a.mime })),
         warnings: [],
         synthetic: { anchorExact: (db.anchor as SyntheticAnchor | null)?.exact ?? "" },
       };

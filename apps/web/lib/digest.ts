@@ -5,6 +5,7 @@ import {
   type Item as SpecItem,
   type ItemResponse,
 } from "@waypoint/spec";
+import { attachmentPathsByWpId } from "./attachments-export";
 import { buildReviewState } from "./review-state";
 import { effectiveStatus, type EffectiveStatus } from "./review-status";
 import { buildSyntheticEntries, type SyntheticEntry } from "./synthetic-export";
@@ -38,6 +39,7 @@ export function buildDigest(detail: DocumentDetail, reviewedAt: string): string 
 
   const statuses = parsed.items.map((it) => effectiveStatus(it.response ?? null));
   const counts = tallyStatuses(statuses);
+  const attachmentPaths = attachmentPathsByWpId(detail);
 
   const title =
     detail.title ?? asString(parsed.frontmatter.title) ?? "Untitled document";
@@ -57,7 +59,7 @@ export function buildDigest(detail: DocumentDetail, reviewedAt: string): string 
   });
 
   const sections: string[] = [`# Digest — ${oneLine(title)}`];
-  const questions = renderQuestions(parsed.items, statuses);
+  const questions = renderQuestions(parsed.items, statuses, attachmentPaths);
   if (questions) sections.push(questions);
   const comments = renderComments(parsed.comments);
   if (comments) sections.push(comments);
@@ -113,11 +115,19 @@ function renderFrontmatter(input: FrontmatterInput): string {
 }
 
 /** `## Questions` — one entry per `wp:` item in document order. Empty → "". */
-function renderQuestions(items: SpecItem[], statuses: EffectiveStatus[]): string {
+function renderQuestions(
+  items: SpecItem[],
+  statuses: EffectiveStatus[],
+  attachmentPaths: Map<string, string[]>,
+): string {
   if (items.length === 0) return "";
   const entries = items.map((item, i) => {
     const heading = `### ${item.wpId || "(no id)"} · ${typeLabel(item)} · ${statuses[i]}`;
     const lines = [heading, `**Q:** ${oneLine(stripWpMarkup(item.promptMd))}`, ...answerLines(item)];
+    // Attachments are additive (B-4): the paths are listed here, not folded into
+    // the answer body, so the digest's Q→A stays clean for agents to parse (§9).
+    const paths = item.wpId ? attachmentPaths.get(item.wpId) : undefined;
+    if (paths && paths.length > 0) lines.push(`**Attachments:** ${paths.join(", ")}`);
     return lines.join("\n");
   });
   return `## Questions\n\n${entries.join("\n\n")}`;

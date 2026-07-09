@@ -1,4 +1,5 @@
 import type { Item, ItemType, ResponseStatus, ResponseValue, Warning } from "@waypoint/spec";
+import type { AttachmentMeta } from "@/lib/attachments-client";
 
 /**
  * Client-side review types (§9). Deliberately free of any DB import so these
@@ -42,6 +43,8 @@ export interface ReviewItemInit {
   rationaleHtml?: string;
   /** Persisted reviewer response, or null (then the embedded draft is used). */
   persisted: PersistedResponse | null;
+  /** Image attachments already on this item's response (§6, B-3); empty when none. */
+  attachments?: AttachmentMeta[];
   /** Parse warnings scoped to this item (e.g. multi-checked single) — §5.3. */
   warnings: Warning[];
   /**

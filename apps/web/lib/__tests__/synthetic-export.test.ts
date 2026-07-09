@@ -82,6 +82,7 @@ describe("buildSyntheticEntries — only answered synthetic items", () => {
       anchor: partial.anchor ?? { exact: "quote", start: 0 },
       orderIndex: partial.orderIndex ?? 0,
       response: partial.response ?? null,
+      attachments: partial.attachments ?? [],
     };
   }
   const detail = (items: ItemDetail[]) => ({ items }) as unknown as DocumentDetail;

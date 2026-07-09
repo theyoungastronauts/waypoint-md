@@ -83,6 +83,27 @@ export const responses = sqliteTable("responses", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+/**
+ * Image attachments on a reviewer's response (§6, decision B-3). One row per
+ * uploaded image, keyed to the `item` whose answer/elaboration field it hangs
+ * under. The bytes never live here: they are written to
+ * `WAYPOINT_DATA_DIR/attachments/<id>` (mirroring the raw-upload store), and only
+ * this metadata row is persisted — `bytes_len` records the size for display and
+ * accounting. Images only, ≤ 10 MB (enforced at the API boundary). Attachments
+ * are additive to export (B-4): they are materialized into a sibling folder and
+ * referenced from the answer interior, never spliced into the immutable body.
+ */
+export const attachments = sqliteTable("attachments", {
+  id: id(),
+  itemId: text("item_id")
+    .notNull()
+    .references(() => items.id),
+  filename: text("filename").notNull(),
+  mime: text("mime").notNull(),
+  bytesLen: integer("bytes_len").notNull(),
+  createdAt: createdAt(),
+});
+
 export const comments = sqliteTable("comments", {
   id: id(),
   documentId: text("document_id")

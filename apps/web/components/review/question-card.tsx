@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { AttachmentMeta } from "@/lib/attachments-client";
 import { cn } from "@/lib/utils";
 import { AttachFile } from "./attach-file";
+import { AttachmentRow, useImageAttachments } from "./attachment-row";
 import { useCaretInsert } from "./caret-insert";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
@@ -19,10 +21,17 @@ const textareaClass =
  * autosaves on an 800 ms debounce, and flushes on blur so leaving the field
  * never drops the last keystroke.
  */
-export function QuestionCard({ itemId }: { itemId: string }) {
+export function QuestionCard({
+  itemId,
+  attachments = [],
+}: {
+  itemId: string;
+  attachments?: AttachmentMeta[];
+}) {
   const { getDraft, saveContent, externalRev } = useResponses();
   const { setFocused } = useFocus();
   const [text, setText] = useState(() => getDraft(itemId).text);
+  const images = useImageAttachments(itemId, attachments);
 
   // Re-seed from the store when the answer is edited externally (§14 insert).
   const rev = externalRev(itemId);
@@ -58,8 +67,10 @@ export function QuestionCard({ itemId }: { itemId: string }) {
           setText(e.target.value);
           save.call(e.target.value);
         }}
+        onPaste={images.onPaste}
         onBlur={save.flush}
       />
+      <AttachmentRow attachments={images.attachments} onRemove={images.remove} error={images.error} />
       <AttachFile onInsert={insertAtCaret} />
     </div>
   );

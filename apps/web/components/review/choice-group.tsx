@@ -2,8 +2,10 @@
 
 import type { Item } from "@waypoint/spec";
 import { useCallback, useEffect, useState } from "react";
+import type { AttachmentMeta } from "@/lib/attachments-client";
 import { cn } from "@/lib/utils";
 import { AttachFile } from "./attach-file";
+import { AttachmentRow, useImageAttachments } from "./attachment-row";
 import { useCaretInsert } from "./caret-insert";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
@@ -26,16 +28,19 @@ export function ChoiceGroup({
   item,
   optionLabelsHtml,
   rationaleHtml,
+  attachments = [],
 }: {
   itemId: string;
   item: Item;
   optionLabelsHtml: string[];
   rationaleHtml?: string;
+  attachments?: AttachmentMeta[];
 }) {
   const { getDraft, saveContent, externalRev } = useResponses();
   const { setFocused } = useFocus();
   const multi = item.select === "multi";
   const options = item.options ?? [];
+  const images = useImageAttachments(itemId, attachments);
 
   const [selected, setSelected] = useState<string[]>(() => getDraft(itemId).selected);
   const [other, setOther] = useState(() => getDraft(itemId).other);
@@ -161,9 +166,11 @@ export function ChoiceGroup({
               setOther(e.target.value);
               saveOther.call(e.target.value);
             }}
+            onPaste={images.onPaste}
             onBlur={saveOther.flush}
           />
         </label>
+        <AttachmentRow attachments={images.attachments} onRemove={images.remove} error={images.error} />
         <AttachFile onInsert={insertAtCaret} />
       </div>
     </div>

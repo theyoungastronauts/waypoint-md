@@ -142,6 +142,53 @@ describe("waypoint pull", () => {
     expect(calls.every((c) => !c.url.includes("format=digest"))).toBe(true);
   });
 
+  it("materializes attachments into <name>.attachments/ beside the review file", async () => {
+    writePointer(project.dir, { id: "doc123", source: "docs/plan.md", pushedAt: "2026-07-07T00:00:00Z" });
+
+    stubFetch((call) => {
+      if (call.url.endsWith("/api/health")) return health();
+      // Attachment bytes stream — matched before the doc/export routes.
+      if (call.url.includes("/api/attachments/att-1")) {
+        return new Response(Buffer.from("IMG-BYTES"), { status: 200 });
+      }
+      if (call.url.includes("/export")) {
+        return annotatedResponse(
+          "# Reviewed\n\n_Attachment: ![shot](plan.attachments/att-1234-shot.png)_\n",
+          "plan.review.md",
+        );
+      }
+      if (call.url.match(/\/api\/documents\/doc123$/) && call.method === "GET") {
+        return jsonResponse({
+          document: {
+            id: "doc123",
+            sourcePath: "docs/plan.md",
+            items: [
+              {
+                id: "it1",
+                response: { status: "answered" },
+                attachments: [{ id: "att-1", filename: "shot.png", exportName: "att-1234-shot.png" }],
+              },
+            ],
+          },
+        });
+      }
+      if (call.url.match(/\/api\/documents\/doc123$/) && call.method === "PATCH") {
+        return jsonResponse({ document: { id: "doc123", status: "pulled" } });
+      }
+      throw new Error(`unexpected ${call.method} ${call.url}`);
+    });
+
+    await runPull(undefined, {}, { config: config(), io: io.io });
+
+    const written = path.join(project.dir, "docs", "plan.attachments", "att-1234-shot.png");
+    expect(existsSync(written)).toBe(true);
+    expect(readFileSync(written)).toEqual(Buffer.from("IMG-BYTES"));
+
+    // No regression: the review file is still written and the doc marked pulled.
+    expect(existsSync(path.join(project.dir, "docs", "plan.review.md"))).toBe(true);
+    expect(readPointer(project.dir)).toBeNull();
+  });
+
   it("resolves --latest via the queue when no id or pointer is given", async () => {
     // sourcePath is null here, so pull falls back to cwd — pin it to the temp
     // project dir so the test never writes into the real working directory.

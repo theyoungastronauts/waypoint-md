@@ -1,7 +1,15 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { exportAnnotated, exportDigest, getDocument, listDocuments, markPulled } from "../client";
+import {
+  exportAnnotated,
+  exportDigest,
+  getAttachmentBytes,
+  getDocument,
+  listDocuments,
+  markPulled,
+  type DocumentDetail,
+} from "../client";
 import { handshake } from "../handshake";
 import { CliError } from "../io";
 import { clearPointer, readPointer } from "../pointer";
@@ -72,6 +80,12 @@ export async function runPull(
   writeFileSync(target, annotated.body, "utf8");
   io.log(`Wrote ${path.relative(process.cwd(), target)}`);
 
+  // Materialize any image attachments into a sibling <name>.attachments/ folder
+  // (§6, B-4). The annotated body already references them from the answer
+  // interiors; here we write the bytes beside the review file so those relative
+  // links resolve. A doc with no attachments writes nothing.
+  await writeAttachments(config, detail, attachmentFolderBase(annotated.filename, id), path.dirname(target), io);
+
   if (digest) {
     // Land the digest in the same directory as the annotated file.
     const digestTarget = reviewTargetPath(config.projectRoot, detail.sourcePath, digest.filename, id);
@@ -84,4 +98,35 @@ export async function runPull(
     clearPointer(config.projectRoot);
   }
   io.log(`Marked ${id.slice(0, 8)} pulled.`);
+}
+
+/** The `<name>` for the attachments folder, derived from the annotated filename. */
+function attachmentFolderBase(annotatedFilename: string, id: string): string {
+  const stripped = annotatedFilename.replace(/\.review\.md$/, "");
+  return stripped.length > 0 ? stripped : id;
+}
+
+/**
+ * Write every attachment on the document into `<base>.attachments/` beside the
+ * review file (§6, B-4). Uses each attachment's server-supplied `exportName` so
+ * the on-disk filenames match the reference paths already spliced into the
+ * answer interiors. No-op when the document has no attachments.
+ */
+async function writeAttachments(
+  config: CommandDeps["config"],
+  detail: DocumentDetail,
+  folderBase: string,
+  reviewDir: string,
+  io: CommandDeps["io"],
+): Promise<void> {
+  const all = detail.items.flatMap((it) => it.attachments ?? []);
+  if (all.length === 0) return;
+
+  const folderDir = path.join(reviewDir, `${folderBase}.attachments`);
+  mkdirSync(folderDir, { recursive: true });
+  for (const att of all) {
+    const bytes = await getAttachmentBytes(config, att.id);
+    writeFileSync(path.join(folderDir, att.exportName), bytes);
+  }
+  io.log(`Wrote ${all.length} attachment(s) to ${path.relative(process.cwd(), folderDir)}`);
 }

@@ -8,6 +8,7 @@ import type {
   ResponseValue,
 } from "@waypoint/spec";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { attachmentsByItem, type AttachmentMeta } from "./attachments";
 import { getDb } from "./db/client";
 import { comments, documents, items, projects, responses } from "./db/schema";
 
@@ -290,6 +291,8 @@ export interface ItemDetail {
   anchor: SyntheticAnchor | null;
   orderIndex: number;
   response: { value: ResponseValue | null; status: string | null; updatedAt: string } | null;
+  /** Image attachments on this item's response (§6, B-3). Empty when none. */
+  attachments: AttachmentMeta[];
 }
 
 export interface CommentDetail {
@@ -335,6 +338,7 @@ export function getDocumentDetail(id: string): DocumentDetail | null {
       ? db.select().from(responses).where(inArray(responses.itemId, itemIds)).all()
       : [];
   const responseByItem = new Map(responseRows.map((r) => [r.itemId, r]));
+  const attachmentsByItemId = attachmentsByItem(itemIds);
 
   const commentRows = db
     .select()
@@ -359,6 +363,7 @@ export function getDocumentDetail(id: string): DocumentDetail | null {
         response: r
           ? { value: r.value as ResponseValue | null, status: r.status, updatedAt: r.updatedAt }
           : null,
+        attachments: attachmentsByItemId.get(it.id) ?? [],
       };
     }),
     comments: commentRows.map((c) => ({

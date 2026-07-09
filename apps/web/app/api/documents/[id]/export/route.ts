@@ -1,5 +1,6 @@
 import { applyReview } from "@waypoint/spec";
 import { toErrorResponse, HttpError } from "@/lib/api/http";
+import { enrichReviewWithAttachments } from "@/lib/attachments-export";
 import { buildDigest } from "@/lib/digest";
 import { getDocumentDetail } from "@/lib/documents";
 import { buildReviewState, exportFilename } from "@/lib/review-state";
@@ -45,7 +46,11 @@ export async function GET(req: Request, ctx: RouteContext): Promise<Response> {
     if (format === "digest") {
       body = buildDigest(detail, now);
     } else {
-      const review = buildReviewState(detail, now);
+      // Attachments are additive (B-4): enrich the review so each item's
+      // reference line lands in its wp:answer interior as ordinary answer content.
+      // applyReview stays untouched, so a doc with no attachments is a no-op here
+      // and still exports byte-identically.
+      const review = enrichReviewWithAttachments(buildReviewState(detail, now), detail);
       // Synthetic items never enter the splice writer (§5.7): their responses are
       // appended below the (byte-faithful) document body, and only when they exist.
       body = appendSyntheticResponses(

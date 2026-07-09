@@ -13,6 +13,7 @@ function item(partial: Partial<ItemDetail>): ItemDetail {
     anchor: null,
     orderIndex: 0,
     response: null,
+    attachments: [],
     ...partial,
   };
 }

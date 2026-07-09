@@ -22,7 +22,7 @@ import type { ReviewItemInit } from "./types";
  * rail and later keyboard nav can scroll to and highlight it.
  */
 export function ItemCard({ init, index }: { init: ReviewItemInit; index: number }) {
-  const { item, itemId, promptHtml, optionLabelsHtml, rationaleHtml, warnings, synthetic } = init;
+  const { item, itemId, promptHtml, optionLabelsHtml, rationaleHtml, warnings, synthetic, attachments } = init;
   const { focusedId, setFocused, register } = useFocus();
   const { getSave, statusOf, toggleFlag, toggleSkip } = useResponses();
   const { enabled: aiEnabled, explain } = useAgent();
@@ -94,9 +94,10 @@ export function ItemCard({ init, index }: { init: ReviewItemInit; index: number 
             item={item}
             optionLabelsHtml={optionLabelsHtml}
             rationaleHtml={rationaleHtml}
+            attachments={attachments ?? []}
           />
         ) : (
-          <QuestionCard itemId={itemId} />
+          <QuestionCard itemId={itemId} attachments={attachments ?? []} />
         )}
       </div>
 

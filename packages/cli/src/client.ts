@@ -53,9 +53,21 @@ export interface DocumentSummary {
   updatedAt: string;
 }
 
+/** One image attachment as the document detail reports it (§6, B-4). */
+export interface AttachmentDetail {
+  id: string;
+  filename: string;
+  /** The collision-free name this materializes as inside `<name>.attachments/`. */
+  exportName: string;
+}
+
 export interface DocumentDetail extends DocumentSummary {
   sourcePath: string | null;
-  items: Array<{ id: string; response: { status: string | null } | null }>;
+  items: Array<{
+    id: string;
+    response: { status: string | null } | null;
+    attachments?: AttachmentDetail[];
+  }>;
 }
 
 export interface HealthInfo {
@@ -196,6 +208,15 @@ async function exportFormat(
   const body = await res.text();
   const filename = filenameFromDisposition(res.headers.get("content-disposition"));
   return { filename, body };
+}
+
+/** Fetch one attachment's raw bytes for materialization into `<name>.attachments/`. */
+export async function getAttachmentBytes(config: ResolvedConfig, id: string): Promise<Buffer> {
+  const res = await doFetch(`${config.url}/api/attachments/${encodeURIComponent(id)}`, {
+    headers: headers(config),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return Buffer.from(await res.arrayBuffer());
 }
 
 export async function markPulled(config: ResolvedConfig, id: string): Promise<void> {

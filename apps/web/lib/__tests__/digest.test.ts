@@ -47,6 +47,7 @@ function item(wpId: string, value: ResponseValue | null, status: string | null =
     anchor: null,
     orderIndex: 0,
     response: value === null && status === null ? null : { value, status, updatedAt: AT },
+    attachments: [],
   };
 }
 
@@ -68,6 +69,7 @@ function synthetic(
     anchor,
     orderIndex: 0,
     response: value === null && status === null ? null : { value, status, updatedAt: AT },
+    attachments: [],
   };
 }
 
@@ -332,6 +334,7 @@ describe("buildDigest — separates author Why from reviewer Note (SPEC 1.1.0)",
             status: "answered",
             updatedAt: AT,
           },
+          attachments: [],
         },
       ],
     });

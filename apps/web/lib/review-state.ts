@@ -67,18 +67,29 @@ function asStatus(value: string | null): ResponseStatus | undefined {
 export type ExportKind = "annotated" | "digest";
 
 /**
+ * The `<name>` stem shared by every export artifact for a document (§11): the
+ * annotated file is `<name>.review.md`, the digest `<name>.digest.md`, and the
+ * attachments folder `<name>.attachments/` (decision B-4). Source file stem when
+ * known, else a slug of the title, else the document id — so the reference lines
+ * the server writes and the folder the CLI creates always agree on `<name>`.
+ */
+export function exportBaseName(
+  detail: Pick<DocumentDetail, "id" | "title" | "sourcePath">,
+): string {
+  const fromPath = detail.sourcePath ? basename(detail.sourcePath) : null;
+  return fromPath || slugify(detail.title) || detail.id;
+}
+
+/**
  * The download filename for an export (§11): `<name>.review.md` for the
- * annotated file, `<name>.digest.md` for the digest. `<name>` is the source
- * file stem when known, else a slug of the title, else the document id.
+ * annotated file, `<name>.digest.md` for the digest.
  */
 export function exportFilename(
   detail: Pick<DocumentDetail, "id" | "title" | "sourcePath">,
   kind: ExportKind = "annotated",
 ): string {
-  const fromPath = detail.sourcePath ? basename(detail.sourcePath) : null;
-  const base = fromPath || slugify(detail.title) || detail.id;
   const suffix = kind === "digest" ? "digest" : "review";
-  return `${base}.${suffix}.md`;
+  return `${exportBaseName(detail)}.${suffix}.md`;
 }
 
 /** File stem (no directory, no extension) of a source path. */

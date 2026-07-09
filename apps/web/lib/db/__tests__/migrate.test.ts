@@ -20,6 +20,7 @@ const EXPECTED_TABLES = [
   "chat_messages",
   "settings",
   "publications",
+  "attachments",
 ];
 
 const EXPECTED_TRIGGERS = ["publications_fts_ai", "publications_fts_ad", "publications_fts_au"];
