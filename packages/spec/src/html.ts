@@ -43,8 +43,8 @@ export function parseAttrs(source: string): Record<string, string> {
   return attrs;
 }
 
-/** The four wp tag names (§5). */
-export type WpTag = "question" | "answer" | "comment" | "suggestion";
+/** The wp tag names (§5). `rationale` is additive in SPEC 1.1.0 (§5.3). */
+export type WpTag = "question" | "answer" | "rationale" | "comment" | "suggestion";
 
 /** A single `<!-- wp:… -->` comment located in the raw document. */
 export interface WpToken {
@@ -58,7 +58,7 @@ export interface WpToken {
   end: number;
 }
 
-const WP_TAGS = new Set<WpTag>(["question", "answer", "comment", "suggestion"]);
+const WP_TAGS = new Set<WpTag>(["question", "answer", "rationale", "comment", "suggestion"]);
 
 /**
  * Find every `wp:` comment in `raw`, in document order, skipping any whose

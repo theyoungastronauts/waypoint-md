@@ -8,7 +8,7 @@
  */
 
 /** Semver of the review convention. `docs/SPEC.md` is the public contract (§4). */
-export const SPEC_VERSION = "1.0.0";
+export const SPEC_VERSION = "1.1.0";
 
 /** Frontmatter opt-in marker value (`waypoint: 1` in §5.1). */
 export const SPEC_MARKER = 1;
@@ -61,6 +61,12 @@ export interface ItemSpans {
   answerClose?: Span;
   /** Interior of the answer block (between the answer open/close comments). */
   answerInterior?: Span;
+  /** The `<!-- wp:rationale -->` open comment, if present (§5.3, SPEC 1.1.0). */
+  rationaleOpen?: Span;
+  /** The `<!-- /wp:rationale -->` close comment, if present. */
+  rationaleClose?: Span;
+  /** Interior of the rationale block (between the rationale open/close comments). */
+  rationaleInterior?: Span;
 }
 
 /** The current response embedded in the document (drafts, checked boxes, status). */
@@ -85,6 +91,13 @@ export interface Item {
   promptMd: string;
   /** Present for choice questions. */
   options?: ChoiceOption[];
+  /**
+   * The doc producer's "why this option" note from an optional `wp:rationale`
+   * block on a choice question (§5.3, SPEC 1.1.0). Markdown, trimmed. It is
+   * **author input, never review state**: {@link applyReview} never rewrites it,
+   * so its bytes are preserved on export. Absent when there is no rationale block.
+   */
+  rationale?: string;
   spans: ItemSpans;
   /** Current response embedded in the source (pre-filled drafts, checks, status). */
   response?: ItemResponse;
@@ -132,6 +145,10 @@ export type WarningCode =
   | "duplicate-answer"
   | "orphan-answer-close"
   | "unclosed-answer"
+  | "rationale-outside-question"
+  | "duplicate-rationale"
+  | "orphan-rationale-close"
+  | "unclosed-rationale"
   | "no-options"
   | "multi-checked-single"
   | "nested-comment"

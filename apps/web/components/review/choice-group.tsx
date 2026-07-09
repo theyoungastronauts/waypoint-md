@@ -25,10 +25,12 @@ export function ChoiceGroup({
   itemId,
   item,
   optionLabelsHtml,
+  rationaleHtml,
 }: {
   itemId: string;
   item: Item;
   optionLabelsHtml: string[];
+  rationaleHtml?: string;
 }) {
   const { getDraft, saveContent, externalRev } = useResponses();
   const { setFocused } = useFocus();
@@ -109,6 +111,21 @@ export function ChoiceGroup({
           );
         })}
       </ul>
+
+      {rationaleHtml && (
+        // Author's "why this option" note (SPEC 1.1.0), read-only. It is context
+        // the doc producer supplied for the pre-checked option — never the
+        // reviewer's answer, which lives in the editable elaboration box below.
+        <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Why I suggested this
+          </span>
+          <div
+            className="wp-prose text-sm text-muted-foreground"
+            dangerouslySetInnerHTML={{ __html: rationaleHtml }}
+          />
+        </div>
+      )}
 
       {selected.length > 0 && (
         <div className="space-y-0.5">

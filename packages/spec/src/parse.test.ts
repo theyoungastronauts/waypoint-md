@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadFixtures } from "./fixtures.js";
-import { parseDocument } from "./index.js";
+import { applyReview, parseDocument } from "./index.js";
 
 function fixture(name: string): string {
   const found = loadFixtures().find((f) => f.name === name);
@@ -95,6 +95,95 @@ describe("choice labels with leading inline formatting (F-1)", () => {
       }
     }
     expect(pkg?.response).toEqual({ selected: ["`waypoint-md`"] });
+  });
+});
+
+describe("wp:rationale — author input, never review state (§5.3, SPEC 1.1.0)", () => {
+  it("captures the rationale markdown distinct from the reviewer's answer", () => {
+    const raw = fixture("choice-rationale-and-answer.md");
+    const parsed = parseDocument(raw);
+    const deploy = parsed.items.find((i) => i.wpId === "deploy");
+    expect(deploy?.rationale).toBe(
+      "Fly's per-region volumes match the WAL-mode SQLite file we already ship, so\nthere's no storage rework to standing this up.",
+    );
+    // The rationale is NOT part of the response — the reviewer's answer is separate.
+    expect(deploy?.response).toEqual({
+      selected: ["Fly.io"],
+      other: "Going with Fly, but pin a specific region so the volume never migrates.",
+    });
+    expect(parsed.warnings).toEqual([]);
+  });
+
+  it("captures a rationale on a pre-checked option with an empty answer", () => {
+    const parsed = parseDocument(fixture("choice-with-rationale.md"));
+    const db = parsed.items.find((i) => i.wpId === "db");
+    expect(db?.rationale).toContain("SQLite keeps the single-binary deploy story");
+    // Pre-checked box is the selection; no elaboration text; rationale is separate.
+    expect(db?.response).toEqual({ selected: ["SQLite"] });
+  });
+
+  it("is absent on a choice without a wp:rationale block (back-compat)", () => {
+    // A `waypoint: 1` doc with no rationale block parses exactly as before.
+    const parsed = parseDocument(fixture("kitchen-sink.md"));
+    for (const item of parsed.items) expect(item.rationale).toBeUndefined();
+  });
+
+  it("byte-fidelity: an empty review never rewrites a rationale doc", () => {
+    for (const name of ["choice-with-rationale.md", "choice-rationale-and-answer.md"]) {
+      const raw = fixture(name);
+      expect(applyReview(raw, {})).toBe(raw);
+    }
+  });
+
+  it("preserves the rationale block byte-for-byte under a real (non-empty) review", () => {
+    const raw = fixture("choice-with-rationale.md");
+    // The exact rationale block as it appears in the source.
+    const start = raw.indexOf("<!-- wp:rationale -->");
+    const end = raw.indexOf("<!-- /wp:rationale -->") + "<!-- /wp:rationale -->".length;
+    const rationaleBlock = raw.slice(start, end);
+
+    // A review that flips the selection AND writes an elaboration + status.
+    const out = applyReview(raw, {
+      responses: { db: { selected: ["Postgres"], other: "Actually Postgres — we need row locks.", status: "answered" } },
+      reviewedAt: "2026-07-09T00:00:00.000Z",
+    });
+
+    // The checkbox flip and the answer landed…
+    expect(out).toContain("- [x] Postgres");
+    expect(out).toContain("- [ ] SQLite");
+    expect(out).toContain("Actually Postgres — we need row locks.");
+    // …but the rationale block is byte-identical, and re-parses unchanged.
+    expect(out).toContain(rationaleBlock);
+    const reparsed = parseDocument(out);
+    expect(reparsed.items.find((i) => i.wpId === "db")?.rationale).toBe(
+      parseDocument(raw).items.find((i) => i.wpId === "db")?.rationale,
+    );
+  });
+
+  it("a misplaced rationale (after wp:answer) never loosens the options scan past the answer", () => {
+    // §5.3 places rationale before wp:answer; if an author misplaces it AFTER,
+    // the options boundary must stay clamped at wp:answer so a `- [ ]` line in
+    // the answer interior is not mis-parsed as a choice option.
+    const raw = [
+      "<!-- wp:question id=\"q\" type=\"choice\" select=\"single\" -->",
+      "**Pick one:**",
+      "- [x] Alpha",
+      "- [ ] Beta",
+      "<!-- wp:answer -->",
+      "- [ ] this line lives in the answer, not an option",
+      "<!-- /wp:answer -->",
+      "<!-- wp:rationale -->",
+      "misplaced, but should still parse",
+      "<!-- /wp:rationale -->",
+      "<!-- /wp:question -->",
+      "",
+    ].join("\n");
+    const parsed = parseDocument(raw);
+    const item = parsed.items.find((i) => i.wpId === "q");
+    // Exactly the two real options — the answer-interior checkbox is not one.
+    expect(item?.options?.map((o) => o.label)).toEqual(["Alpha", "Beta"]);
+    // And byte-fidelity still holds.
+    expect(applyReview(raw, {})).toBe(raw);
   });
 });
 

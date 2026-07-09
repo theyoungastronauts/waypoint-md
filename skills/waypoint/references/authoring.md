@@ -46,8 +46,10 @@ Recommend staying on the upgraded class through end of quarter, then re-evaluati
 - [ ] Single shared token
 - [ ] Per-device tokens
 - [x] Tailscale-only, no app auth
+<!-- wp:rationale -->
+Tailscale gives us device identity for free and there's no second system to run.
+<!-- /wp:rationale -->
 <!-- wp:answer -->
-Optional elaboration or an "other" answer goes here.
 <!-- /wp:answer -->
 <!-- /wp:question -->
 ```
@@ -56,9 +58,17 @@ Optional elaboration or an "other" answer goes here.
   as checkboxes (pick several).
 - The task-list boxes are the options. Pre-check (`- [x]`) the option you
   recommend; leave all unchecked when you have no lean.
-- The `wp:answer` block is an always-available elaboration field. **A text-only
-  response with no box checked is valid** — always leave room for "none of these,
-  here's what I'd do instead."
+- **Put your "why this pick" reasoning in `wp:rationale`, not `wp:answer`**
+  (SPEC 1.1.0). It sits after the options and before `wp:answer`, renders
+  read-only as "Why I suggested this" under the pre-checked option, and is kept
+  out of the reviewer's answer slot. When you pre-check an option, explain it
+  here and leave `wp:answer` **empty** — that box is the reviewer's, and it now
+  defaults empty on a choice.
+- The `wp:answer` block is the reviewer's always-available elaboration field. **A
+  text-only response with no box checked is valid** — always leave room for "none
+  of these, here's what I'd do instead."
+- `wp:rationale` is optional and choice-only. Omit it when you have no lean; a doc
+  without it parses exactly as before (the block is additive in 1.1.0).
 
 ## ID discipline
 
@@ -86,7 +96,8 @@ without the surrounding prose. So:
 
 - Pre-fill a `wp:answer` (text) or check a box (choice) whenever you have a
   defensible recommendation. It turns review into "confirm or correct," which is
-  far faster than "author from scratch."
+  far faster than "author from scratch." For a choice, the reasoning for a
+  pre-check goes in `wp:rationale` (see above), leaving `wp:answer` empty.
 - Make the draft your *actual* recommendation, not a placeholder. If you're
   genuinely unsure, leave it blank and say why in the prompt.
 - Never fabricate consensus: if two options are close, present both as a choice

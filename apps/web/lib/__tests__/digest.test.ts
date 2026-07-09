@@ -307,6 +307,55 @@ describe("buildDigest — strips wp: markup folded into a prompt (Phase 9 W1)", 
   });
 });
 
+describe("buildDigest — separates author Why from reviewer Note (SPEC 1.1.0)", () => {
+  const rawMd = readFileSync(
+    path.join(FIXTURES, "choice-rationale-and-answer.md"),
+    "utf8",
+  );
+
+  it("renders **Why:** (rationale) distinct from **Note:** (elaboration)", () => {
+    const detail = makeDetail({
+      title: "Deploy target",
+      rawMd,
+      items: [
+        {
+          id: "it-deploy",
+          wpId: "deploy",
+          type: "choice",
+          config: null,
+          promptMd: null,
+          synthetic: false,
+          anchor: null,
+          orderIndex: 0,
+          response: {
+            value: { selected: ["Fly.io"], other: "Going with Fly, but pin a specific region so the volume never migrates." },
+            status: "answered",
+            updatedAt: AT,
+          },
+        },
+      ],
+    });
+    const digest = buildDigest(detail, AT);
+    expect(digest).toContain("### deploy · choice (single) · answered");
+    expect(digest).toContain("**Selected:** Fly.io");
+    // Author rationale (from wp:rationale) is the Why field…
+    expect(digest).toContain("**Why:** Fly's per-region volumes match");
+    // …the reviewer's elaboration (from wp:answer) is the Note field.
+    expect(digest).toContain("**Note:** Going with Fly, but pin a specific region");
+    // The two must not be conflated onto one line.
+    const whyLine = digest.split("\n").find((l) => l.startsWith("**Why:**")) ?? "";
+    expect(whyLine).not.toContain("Going with Fly");
+  });
+
+  it("omits **Why:** when the choice has no rationale block", () => {
+    const detail = makeDetail({
+      rawMd: kitchenSink,
+      items: [item("q2", { selected: ["Single shared token"] }, "answered")],
+    });
+    expect(buildDigest(detail, AT)).not.toContain("**Why:**");
+  });
+});
+
 describe("buildDigest — flagged item with no answer", () => {
   it("shows the flag status and a no-answer marker", () => {
     const detail = makeDetail({

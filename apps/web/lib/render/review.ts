@@ -57,6 +57,7 @@ export function renderReviewDocument(rawMd: string, dbItems: ItemDetail[]): Revi
       item: spec,
       promptHtml: renderMarkdownToSafeHtml(spec.promptMd),
       optionLabelsHtml: (spec.options ?? []).map((o) => renderInlineMarkdownToSafeHtml(o.label)),
+      rationaleHtml: spec.rationale ? renderMarkdownToSafeHtml(spec.rationale) : undefined,
       persisted: toPersisted(db?.response ?? null),
       warnings,
     });

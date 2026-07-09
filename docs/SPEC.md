@@ -1,6 +1,6 @@
-# Waypoint Review Convention — SPEC v1.0.0
+# Waypoint Review Convention — SPEC v1.1.0
 
-**Status:** Stable · **Spec version:** `1.0.0` · **Frontmatter marker:** `waypoint: 1`
+**Status:** Stable · **Spec version:** `1.1.0` · **Frontmatter marker:** `waypoint: 1`
 
 This is the public contract for the Waypoint review convention: a tiny set of
 HTML-comment markers that turn ordinary markdown into an interactive review
@@ -19,6 +19,13 @@ into (`waypoint: 1` for the `1.x` line). Within a major version:
 - **Patch** — clarifications and parser bug fixes; no format change.
 - **Minor** — additive, backward-compatible markers or attributes.
 - **Major** — a breaking change to existing markers; a new `waypoint:` value.
+
+**Changelog**
+
+- **1.1.0** — adds the optional `wp:rationale` block on a choice question (§3).
+  Additive and backward-compatible: a `waypoint: 1` document without a rationale
+  block parses byte-for-byte as it did under 1.0.0. The opt-in marker stays
+  `waypoint: 1` (1 is the major).
 
 ## Design principles
 
@@ -94,6 +101,38 @@ Optional elaboration / "other" text lands here.
 more than one box checked, the parser emits a `multi-checked-single` warning and
 keeps **only the first checked option**. By hand the boxes just work; the app
 renders `single` as a radio group and `multi` as checkboxes.
+
+### Rationale block (`wp:rationale`) — since 1.1.0
+
+An optional `wp:rationale` block carries the **doc producer's "why this option"**
+— the reasoning behind a pre-checked suggestion. It is placed **after the options
+and before `wp:answer`**:
+
+```markdown
+<!-- wp:question id="q2" type="choice" select="single" -->
+**Q2 — Auth model for v1:**
+- [ ] Single shared token
+- [x] Tailscale-only, no app auth
+<!-- wp:rationale -->
+Tailscale gives us device identity for free and there's no second system to run.
+<!-- /wp:rationale -->
+<!-- wp:answer -->
+<!-- /wp:answer -->
+<!-- /wp:question -->
+```
+
+- It is **author input, never reviewer state.** The parser surfaces it as the
+  item's `rationale` (markdown), the app renders it **read-only** ("Why I
+  suggested this") under the pre-checked option, and it is kept **distinct** from
+  the reviewer's elaboration in `wp:answer`.
+- **`applyReview` never rewrites it.** The block's bytes are preserved verbatim on
+  export, so the byte-fidelity invariant (§7) holds for documents with a
+  rationale exactly as for those without.
+- The reviewer's elaboration box (mapping to `wp:answer`) therefore **defaults
+  empty** on a choice question — the agent's rationale no longer seeds it. (Text
+  questions keep their suggested-draft prefill; see §2.)
+- **Back-compatible.** A document with no `wp:rationale` block is unaffected; the
+  block is additive (minor version `1.1.0`).
 
 ## 4. Comment
 
@@ -308,6 +347,7 @@ synthetic: 0
 ### q2 · choice (single) · answered
 **Q:** **Q2 — Auth model for v1:**
 **Selected:** Tailscale-only, no app auth
+**Why:** Tailscale gives us device identity for free.
 **Note:** revisit once we add a second device
 
 ### q3 · choice (multi) · flagged
@@ -347,8 +387,11 @@ keys are always present:
   untouched` (the effective status, same rules as §5). `**Q:**` holds the prompt
   collapsed to one line. Then:
   - text items: `**A:** <answer>` (or `**A:** _(no answer)_`).
-  - choice items: `**Selected:** <label, label>` (or `_(none)_`), and, when a
-    freeform elaboration exists, a following `**Note:** <text>`.
+  - choice items: `**Selected:** <label, label>` (or `_(none)_`); then, when the
+    item has a `wp:rationale` block (§3, since 1.1.0), the author's `**Why:**
+    <text>`; then, when a freeform reviewer elaboration exists, `**Note:**
+    <text>`. `**Why:**` (author rationale) and `**Note:**` (reviewer elaboration)
+    are distinct fields and never conflated.
 - **Comments.** One `###` entry per comment (reviewer-authored and any authored
   in the source). `### <id>`, then `**Anchor:** "<exact quote>"`, an optional
   `**Comment:** <body>`, and an optional `**Suggestion:** <replacement>`.
@@ -357,15 +400,15 @@ keys are always present:
   `### <n> · <type> · <status>`, then `**Anchor:** "<source quote>"`, `**Q:**`,
   and the same answer lines as a question entry.
 
-**Value spans.** A field label (`**Q:**`, `**A:**`, `**Selected:**`,
+**Value spans.** A field label (`**Q:**`, `**A:**`, `**Selected:**`, `**Why:**`,
 `**Note:**`, `**Anchor:**`, `**Comment:**`, `**Suggestion:**`) starts at the
 beginning of a line. **Any line that begins with one of these `**Label:**`
 tokens is a field boundary** — it ends the value of the preceding field. So a
 multi-line value runs until the next line that starts with a `**Label:**`, a
 `###` entry heading, or a `##` section heading, whichever comes first.
 `**Q:**`, `**Selected:**`, and `**Anchor:**` values are always single-line;
-`**A:**`, `**Note:**`, `**Comment:**`, and `**Suggestion:**` values may span
-multiple lines and end at the next boundary. (The renderer emits each field on
+`**A:**`, `**Why:**`, `**Note:**`, `**Comment:**`, and `**Suggestion:**` values
+may span multiple lines and end at the next boundary. (The renderer emits each field on
 its own line, so this boundary rule is unambiguous in practice.)
 
 The digest is **not** round-tripped: there is no parser that reconstructs review
@@ -379,6 +422,7 @@ canonical, byte-faithful artifact (§7).
 `parseDocument` may emit any of: `missing-id`, `duplicate-id`, `missing-type`,
 `unknown-type`, `unclosed-question`, `orphan-question-close`,
 `answer-outside-question`, `duplicate-answer`, `orphan-answer-close`,
-`unclosed-answer`, `no-options`, `multi-checked-single`, `nested-comment`,
-`suggestion-outside-comment`, `orphan-suggestion`, `orphan-comment-close`,
-`unclosed-comment`. None is fatal.
+`unclosed-answer`, `rationale-outside-question`, `duplicate-rationale`,
+`orphan-rationale-close`, `unclosed-rationale`, `no-options`,
+`multi-checked-single`, `nested-comment`, `suggestion-outside-comment`,
+`orphan-suggestion`, `orphan-comment-close`, `unclosed-comment`. None is fatal.

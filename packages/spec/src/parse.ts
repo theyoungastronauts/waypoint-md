@@ -43,6 +43,9 @@ interface WorkingQuestion {
   answerStatus?: string;
   answerClose?: Span;
   answerInterior?: Span;
+  rationaleOpen?: Span;
+  rationaleClose?: Span;
+  rationaleInterior?: Span;
 }
 
 interface WorkingComment {
@@ -101,12 +104,22 @@ export function parseInternal(raw: string): InternalParseResult {
     if (!q.answerClose && q.answerOpen) {
       warn("unclosed-answer", `wp:answer for "${q.wpId}" was never closed`, { wpId: q.wpId, offset: q.answerOpen.start });
     }
+    if (!q.rationaleClose && q.rationaleOpen) {
+      warn("unclosed-rationale", `wp:rationale for "${q.wpId}" was never closed`, { wpId: q.wpId, offset: q.rationaleOpen.start });
+    }
 
-    const blockEnd = closeToken ? closeToken.end : q.answerClose?.end ?? q.answerOpen?.end ?? q.open.end;
+    const blockEnd = closeToken ? closeToken.end : q.answerClose?.end ?? q.answerOpen?.end ?? q.rationaleClose?.end ?? q.rationaleOpen?.end ?? q.open.end;
     const boundary = q.answerOpen?.start ?? closeToken?.start ?? blockEnd;
 
+    // Options end at the rationale block when present (§5.3): the rationale is
+    // author prose that may itself contain a list, and it must never be mistaken
+    // for a choice option — that would also let a checkbox flip splice into it.
+    // Use the *earlier* of the rationale-open and the answer/close boundary, so a
+    // well-placed rationale tightens the scan while a misplaced one (after
+    // wp:answer, contrary to §5.3) can never loosen it past the answer.
+    const optionsBoundary = Math.min(q.rationaleOpen?.start ?? Infinity, boundary);
     const options = q.type === "choice" || q.type === undefined
-      ? analysis.taskItems.filter((t) => t.start > q.open.end && t.start < boundary)
+      ? analysis.taskItems.filter((t) => t.start > q.open.end && t.start < optionsBoundary)
       : [];
 
     let type = q.type;
@@ -127,6 +140,9 @@ export function parseInternal(raw: string): InternalParseResult {
       answerOpen: q.answerOpen,
       answerClose: q.answerClose,
       answerInterior: q.answerInterior,
+      rationaleOpen: q.rationaleOpen,
+      rationaleClose: q.rationaleClose,
+      rationaleInterior: q.rationaleInterior,
     };
 
     const item: Item = { wpId: q.wpId, type, promptMd, spans };
@@ -137,6 +153,14 @@ export function parseInternal(raw: string): InternalParseResult {
       }
       item.select = q.select ?? "single";
       item.options = options.map((o) => ({ label: o.label, checked: o.checked, marker: o.marker }));
+    }
+
+    // Author "why this option" rationale (§5.3, SPEC 1.1.0) — captured only when
+    // the block is closed and non-empty. This is input, never review state, so
+    // `extractResponse` below never reads it and `applyReview` never rewrites it.
+    if (q.rationaleClose && q.rationaleInterior) {
+      const rationaleMd = raw.slice(q.rationaleInterior.start, q.rationaleInterior.end).trim();
+      if (rationaleMd.length > 0) item.rationale = rationaleMd;
     }
 
     item.response = extractResponse(raw, item, q, options, warn);
@@ -215,6 +239,18 @@ export function parseInternal(raw: string): InternalParseResult {
           question.answerInterior = { start: token.end, end: token.end };
           break;
         }
+        case "rationale": {
+          if (!question) {
+            warn("rationale-outside-question", "wp:rationale outside any wp:question", { offset: token.start });
+            break;
+          }
+          if (question.rationaleOpen) {
+            warn("duplicate-rationale", `wp:question "${question.wpId}" has more than one wp:rationale`, { wpId: question.wpId, offset: token.start });
+          }
+          question.rationaleOpen = tokenSpan(token);
+          question.rationaleInterior = { start: token.end, end: token.end };
+          break;
+        }
         case "comment": {
           if (comment) {
             warn("nested-comment", `wp:comment "${comment.id}" was never closed before a new one`, { offset: token.start });
@@ -255,6 +291,15 @@ export function parseInternal(raw: string): InternalParseResult {
           }
           question.answerClose = tokenSpan(token);
           question.answerInterior = { start: question.answerOpen.end, end: token.start };
+          break;
+        }
+        case "rationale": {
+          if (!question || !question.rationaleOpen) {
+            warn("orphan-rationale-close", "/wp:rationale with no open rationale", { offset: token.start });
+            break;
+          }
+          question.rationaleClose = tokenSpan(token);
+          question.rationaleInterior = { start: question.rationaleOpen.end, end: token.start };
           break;
         }
         case "comment": {

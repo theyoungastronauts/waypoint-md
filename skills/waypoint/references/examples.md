@@ -32,10 +32,16 @@ Recommend staying on the upgraded class through end of quarter, then re-evaluati
 - [ ] Single shared token
 - [ ] Per-device tokens
 - [x] Tailscale-only, no app auth
+<!-- wp:rationale -->
+Tailscale gives us device identity for free and there's no second system to run.
+<!-- /wp:rationale -->
 <!-- wp:answer -->
 <!-- /wp:answer -->
 <!-- /wp:question -->
 ```
+
+`wp:rationale` is the author's "why this pick" for the pre-checked option — it
+renders read-only and leaves the reviewer's `wp:answer` box empty.
 
 Push it:
 
@@ -77,6 +83,9 @@ Stay on the upgraded class through end of quarter, then re-evaluate at the Q4 re
 - [x] Single shared token
 - [ ] Per-device tokens
 - [ ] Tailscale-only, no app auth
+<!-- wp:rationale -->
+Tailscale gives us device identity for free and there's no second system to run.
+<!-- /wp:rationale -->
 <!-- wp:answer status="answered" -->
 Shared token is fine for now; Tailscale stays as the network boundary.
 <!-- /wp:answer -->
@@ -90,7 +99,9 @@ Only after we confirm the read replica lag is back to baseline.
 What changed, and how to read it:
 - **q1**: reviewer edited the draft; `status="answered"`.
 - **q2**: reviewer switched the selection from "Tailscale-only" to "Single shared
-  token" (`[x]` moved) and added elaboration.
+  token" (`[x]` moved) and added elaboration. The `wp:rationale` block is
+  **untouched** — it's the author's input, preserved byte-for-byte even when the
+  reviewer overrides the pick.
 - **c1**: a selection comment anchored to the quoted text "right-size down".
   A `wp:suggestion` block, if present, carries verbatim replacement text to apply.
 
@@ -131,6 +142,7 @@ synthetic: 0
 ### q2 · choice (single) · answered
 **Q:** **Q2 — Auth model for v1:**
 **Selected:** Single shared token
+**Why:** Tailscale gives us device identity for free and there's no second system to run.
 **Note:** Shared token is fine for now; Tailscale stays as the network boundary.
 
 ## Comments
@@ -144,7 +156,8 @@ How to read the digest:
 - Frontmatter counts tell you at a glance how much was answered vs. `flagged`
   (needs discussion) vs. `skipped` (deferred).
 - Each `### <id> · <type> · <status>` entry is one question. `**A:**` for text;
-  `**Selected:**` (+ optional `**Note:**`) for choice.
+  `**Selected:**` for choice, with an optional author `**Why:**` (the
+  `wp:rationale`) and reviewer `**Note:**` (the elaboration) as distinct fields.
 - `## Comments` lists reviewer comments with their quoted `**Anchor:**`; a
   `**Suggestion:**` line, when present, is replacement text to apply verbatim.
 - `## Structured responses` (not shown here) appears for adoptive-import answers on

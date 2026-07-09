@@ -34,6 +34,12 @@ export interface ReviewItemInit {
    * for selection + byte-fidelity; this is display-only.
    */
   optionLabelsHtml: string[];
+  /**
+   * The choice's `wp:rationale` ("why I suggested this") pre-rendered to
+   * sanitized HTML, when present (SPEC 1.1.0). Rendered read-only under the
+   * options; it is author context, never the reviewer's editable answer.
+   */
+  rationaleHtml?: string;
   /** Persisted reviewer response, or null (then the embedded draft is used). */
   persisted: PersistedResponse | null;
   /** Parse warnings scoped to this item (e.g. multi-checked single) — §5.3. */
@@ -79,10 +85,15 @@ export function initialDraft(init: ReviewItemInit): Draft {
   }
   const embedded = init.item.response;
   if (embedded) {
+    // SPEC 1.1.0 split: a choice's `wp:answer` no longer holds the agent's
+    // rationale (that moved to `wp:rationale`, rendered read-only), so the
+    // elaboration box defaults empty on a choice — the reviewer's own words go
+    // there. Text questions keep their suggested-draft prefill (§5.2).
+    const seedOther = init.item.type === "choice" ? "" : (embedded.other ?? "");
     return {
       text: embedded.text ?? "",
       selected: embedded.selected ?? [],
-      other: embedded.other ?? "",
+      other: seedOther,
       status: embedded.status ?? null,
     };
   }

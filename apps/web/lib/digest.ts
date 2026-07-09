@@ -123,12 +123,19 @@ function renderQuestions(items: SpecItem[], statuses: EffectiveStatus[]): string
   return `## Questions\n\n${entries.join("\n\n")}`;
 }
 
-/** The answer field(s) for one item: `**A:**` for text, `**Selected:**`/`**Note:**` for choice. */
+/**
+ * The answer field(s) for one item: `**A:**` for text; for choice,
+ * `**Selected:**`, then the author's `**Why:**` (the `wp:rationale`, SPEC 1.1.0)
+ * and the reviewer's `**Note:**` (the `wp:answer` elaboration) as distinct
+ * fields — the split that keeps agent rationale out of the reviewer's slot (§9.3).
+ */
 function answerLines(item: SpecItem): string[] {
   const response = item.response;
   if (item.type === "choice") {
     const selected = response?.selected ?? [];
     const lines = [`**Selected:** ${selected.length > 0 ? selected.join(", ") : "_(none)_"}`];
+    const why = stripWpMarkup(item.rationale ?? "").trim();
+    if (why) lines.push(`**Why:** ${why}`);
     const other = stripWpMarkup(response?.other ?? "").trim();
     if (other) lines.push(`**Note:** ${other}`);
     return lines;
