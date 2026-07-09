@@ -7,6 +7,7 @@ import { useAgent, type AgentMessage } from "./agent-store";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
 import { isPinnedToBottom } from "./scroll";
+import { splitSuggestions } from "./suggestions";
 
 /**
  * The document-scoped chat surface in the right rail (§14). Streams assistant
@@ -126,12 +127,23 @@ function MessageBubble({ message, streaming }: { message: AgentMessage; streamin
         {isUser ? (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
-          <div
-            className="wp-prose break-words text-sm"
-            // Sanitized by the shared rehype-sanitize pipeline — same allowlist
-            // as document prose, so a model reply can't inject live markup.
-            dangerouslySetInnerHTML={{ __html: renderMarkdownToSafeHtml(message.content) }}
-          />
+          <div className="space-y-2">
+            {/* Prose renders through the shared rehype-sanitize pipeline (same
+                allowlist as document prose, so a model reply can't inject live
+                markup); each ```wpsuggest fence is lifted out into a card and
+                never double-rendered as a prose code block. */}
+            {splitSuggestions(message.content).map((seg, idx) =>
+              seg.kind === "suggestion" ? (
+                <SuggestionCard key={idx} contents={seg.text} />
+              ) : (
+                <div
+                  key={idx}
+                  className="wp-prose break-words text-sm"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownToSafeHtml(seg.text) }}
+                />
+              ),
+            )}
+          </div>
         )}
         {streaming && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
         {!isUser && !streaming && message.content.length > 0 && <InsertControls text={message.content} />}
@@ -170,6 +182,61 @@ function InsertControls({ text }: { text: string }) {
       >
         Replace
       </button>
+    </div>
+  );
+}
+
+/**
+ * A ```wpsuggest block (§14, decision B-1): the agent's proposed answer as a
+ * distinct card with a one-click **Use this answer** that replaces the focused
+ * item's answer with the *raw* fence contents (answers are markdown — the insert
+ * uses the verbatim text, never the rendered HTML). The preview is rendered
+ * through the same sanitizing pipeline as all model output. With nothing focused
+ * it shows the same focus-first hint as {@link InsertControls}, so the action can
+ * never silently no-op.
+ */
+function SuggestionCard({ contents }: { contents: string }) {
+  const { focusedId } = useFocus();
+  const { insertIntoAnswer } = useResponses();
+  const [inserted, setInserted] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    };
+  }, []);
+
+  const use = () => {
+    if (!focusedId) return;
+    insertIntoAnswer(focusedId, contents, "replace");
+    setInserted(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setInserted(false), 1500);
+  };
+
+  return (
+    <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Suggested answer</p>
+      <div
+        className="wp-prose break-words text-sm"
+        // Preview only — sanitized like all model output. The insert uses the raw
+        // markdown `contents`, never this rendered HTML.
+        dangerouslySetInnerHTML={{ __html: renderMarkdownToSafeHtml(contents) }}
+      />
+      {focusedId ? (
+        <button
+          type="button"
+          onClick={use}
+          className="mt-2.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          {inserted ? "Inserted ✓" : "Use this answer"}
+        </button>
+      ) : (
+        <p className="mt-2.5 border-t border-border pt-2 text-xs text-muted-foreground">
+          Focus a question to insert this into its answer.
+        </p>
+      )}
     </div>
   );
 }

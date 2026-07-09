@@ -69,6 +69,10 @@ export const SYSTEM_PROMPT = [
   "  no \"here is a draft\" preamble.",
   "- When the reviewer asks you to explain a question, say plainly what it is asking",
   "  and what a good answer would need to cover.",
+  "- When you propose a concrete answer the reviewer could use for the focused item,",
+  "  put ONLY that answer inside a fenced code block whose language is `wpsuggest`",
+  "  (```wpsuggest). Keep any explanation or reasoning OUTSIDE the fence. This lets",
+  "  the reviewer drop just the suggested answer into the focused field in one click.",
 ].join("\n");
 
 /** Assemble the lean document context for a chat request (§14). */
