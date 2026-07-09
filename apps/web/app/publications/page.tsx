@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { PublicationList } from "@/components/publications/publication-list";
+import { PublicationList, PUBLICATIONS_PAGE_SIZE } from "@/components/publications/publication-list";
 import { PublishDisabled } from "@/components/publications/publish-disabled";
 import { listPublications, toPublicationSummary } from "@/lib/publications";
 import { publishEnabled } from "@/lib/publish/config";
@@ -16,7 +16,12 @@ export const metadata: Metadata = { title: "Publications" };
  */
 export default function PublicationsPage() {
   const enabled = publishEnabled();
-  const publications = enabled ? listPublications().map(toPublicationSummary) : [];
+  // Seed the first page (same size the client paginates by) so the first paint
+  // has rows without a fetch; the client loads further pages on scroll.
+  const firstPage = enabled
+    ? listPublications({ limit: PUBLICATIONS_PAGE_SIZE }).map(toPublicationSummary)
+    : [];
+  const firstNextOffset = firstPage.length === PUBLICATIONS_PAGE_SIZE ? firstPage.length : null;
 
   return (
     <section className="mx-auto w-full max-w-3xl space-y-6">
@@ -28,7 +33,11 @@ export default function PublicationsPage() {
         </p>
       </div>
 
-      {enabled ? <PublicationList initialPublications={publications} /> : <PublishDisabled />}
+      {enabled ? (
+        <PublicationList initialPublications={firstPage} initialNextOffset={firstNextOffset} />
+      ) : (
+        <PublishDisabled />
+      )}
     </section>
   );
 }

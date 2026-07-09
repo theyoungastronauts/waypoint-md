@@ -49,6 +49,26 @@ describe("insert + read", () => {
     const ids = listPublications({ limit: 200 }).map((r) => r.id);
     expect(ids.indexOf(newer.id)).toBeLessThan(ids.indexOf(older.id));
   });
+
+  it("paginates by limit + offset, reconstructing the full newest-first order", () => {
+    seed({ title: "pg-a" });
+    seed({ title: "pg-b" });
+    seed({ title: "pg-c" });
+    // The full ordering (robust to other tests' rows in the shared DB).
+    const full = listPublications({ limit: 500 }).map((r) => r.id);
+    expect(full.length).toBeGreaterThanOrEqual(3);
+
+    // Walk it two at a time; the concatenation must equal the full order with no
+    // overlap, and no page may exceed the limit.
+    const walked: string[] = [];
+    for (let offset = 0; offset < full.length; offset += 2) {
+      const page = listPublications({ limit: 2, offset });
+      expect(page.length).toBeLessThanOrEqual(2);
+      walked.push(...page.map((r) => r.id));
+    }
+    expect(walked).toEqual(full);
+    expect(new Set(walked).size).toBe(walked.length);
+  });
 });
 
 describe("FTS search", () => {

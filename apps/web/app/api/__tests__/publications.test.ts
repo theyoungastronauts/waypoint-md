@@ -205,6 +205,35 @@ describe("GET /api/publications", () => {
     expect(res.status).toBe(200);
     expect(Array.isArray((await res.json()).publications)).toBe(true);
   });
+
+  it("paginates with limit + offset and reports nextOffset until the last page", async () => {
+    for (let i = 0; i < 3; i++) {
+      await create({ markdown: `# Doc ${i}\n\nbody ${i}`, filename: `doc-${i}.md` });
+    }
+    // Walk pages from the start; the shared test DB may hold rows from earlier
+    // tests, so assert the pagination invariants rather than an absolute count.
+    const seen: string[] = [];
+    let offset = 0;
+    let pages = 0;
+    for (;;) {
+      const page = await (
+        await listRoute(new Request(`http://localhost/api/publications?limit=2&offset=${offset}`))
+      ).json();
+      pages += 1;
+      seen.push(...page.publications.map((p: { id: string }) => p.id));
+      if (page.nextOffset === null) {
+        // Last page is short (or exactly fills, but then there'd be no null yet):
+        expect(page.publications.length).toBeLessThanOrEqual(2);
+        break;
+      }
+      expect(page.publications).toHaveLength(2); // a full page carries a cursor
+      expect(page.nextOffset).toBe(offset + 2);
+      offset = page.nextOffset;
+    }
+    expect(pages).toBeGreaterThanOrEqual(2);
+    // Pages never overlap: every id seen exactly once.
+    expect(new Set(seen).size).toBe(seen.length);
+  });
 });
 
 describe("GET /api/publications/:id", () => {

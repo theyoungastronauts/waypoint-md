@@ -80,6 +80,8 @@ export interface ListPublicationsOptions {
   /** FTS5 query over title + source markdown. Empty/absent → list everything. */
   q?: string;
   limit?: number;
+  /** Rows to skip, for pagination (newest-first order is stable). */
+  offset?: number;
 }
 
 const DEFAULT_LIMIT = 50;
@@ -88,6 +90,11 @@ const MAX_LIMIT = 200;
 function clampLimit(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_LIMIT;
   return Math.max(1, Math.min(MAX_LIMIT, Math.floor(limit)));
+}
+
+function clampOffset(offset: number | undefined): number {
+  if (offset === undefined || !Number.isFinite(offset)) return 0;
+  return Math.max(0, Math.floor(offset));
 }
 
 /**
@@ -111,10 +118,17 @@ export function toFtsMatch(raw: string): string {
 export function listPublications(options: ListPublicationsOptions = {}): PublicationRow[] {
   const db = getDb();
   const limit = clampLimit(options.limit);
+  const offset = clampOffset(options.offset);
   const q = (options.q ?? "").trim();
 
   if (!q) {
-    return db.select().from(publications).orderBy(desc(publications.createdAt)).limit(limit).all() as PublicationRow[];
+    return db
+      .select()
+      .from(publications)
+      .orderBy(desc(publications.createdAt))
+      .limit(limit)
+      .offset(offset)
+      .all() as PublicationRow[];
   }
 
   const match = toFtsMatch(q);
@@ -132,6 +146,7 @@ export function listPublications(options: ListPublicationsOptions = {}): Publica
     .where(inArray(publications.id, ids))
     .orderBy(desc(publications.createdAt))
     .limit(limit)
+    .offset(offset)
     .all() as PublicationRow[];
 }
 

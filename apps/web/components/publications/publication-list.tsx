@@ -1,24 +1,36 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 import { useDebouncedCallback } from "@/components/review/use-debounced-callback";
+import { Button } from "@/components/ui/button";
 import type { PublicationSummary } from "@/lib/publications";
 import { cn } from "@/lib/utils";
 import { PublicationRow } from "./publication-row";
 
+/** How many rows the registry loads per page (server seed + each scroll load). */
+export const PUBLICATIONS_PAGE_SIZE = 25;
+
+interface PublicationPage {
+  publications: PublicationSummary[];
+  nextOffset: number | null;
+}
+
 /**
  * The registry browser (§ publish spec): a search box driving the FTS-backed
- * `GET /api/publications?q=` and the newest-first result list. The server seeds
- * the initial (empty-query) list so the first paint has data; typing debounces
- * into a query key, and TanStack Query keeps the previous results visible while
- * the next search resolves. Empty and error states are handled inline.
+ * `GET /api/publications?q=` and a newest-first, infinitely-scrolling list. The
+ * server seeds the first page so the first paint has data; scrolling a sentinel
+ * into view loads the next page (with an explicit "Load more" button as an
+ * accessible fallback). Changing the search resets to page one under a new
+ * query key. TanStack Query keeps prior results visible while the next resolves.
  */
 export function PublicationList({
   initialPublications,
+  initialNextOffset,
 }: {
   initialPublications: PublicationSummary[];
+  initialNextOffset: number | null;
 }) {
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
@@ -29,17 +41,34 @@ export function PublicationList({
     debounceQuery(value.trim());
   };
 
-  const { data, isFetching, isError } = useQuery({
-    queryKey: ["publications", query],
-    queryFn: ({ signal }) => fetchPublications(query, signal),
-    // The empty-query list is server-rendered; seed it so the first paint (and a
-    // return to the cleared search) shows rows without a fetch round-trip.
-    initialData: query === "" ? initialPublications : undefined,
-    placeholderData: keepPreviousData,
-  });
+  const { data, isFetching, isError, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ["publications", query],
+      queryFn: ({ pageParam, signal }) => fetchPublications(query, pageParam, signal),
+      initialPageParam: 0,
+      getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
+      // The empty-query first page is server-rendered; seed it so the first
+      // paint (and a return to the cleared search) shows rows with no fetch.
+      initialData:
+        query === ""
+          ? { pages: [{ publications: initialPublications, nextOffset: initialNextOffset }], pageParams: [0] }
+          : undefined,
+    });
 
-  const publications = data ?? [];
+  const publications = data?.pages.flatMap((p) => p.publications) ?? [];
   const searching = query.length > 0;
+
+  // Auto-load the next page when the sentinel scrolls into view.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasNextPage) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && !isFetchingNextPage) fetchNextPage();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, publications.length]);
 
   return (
     <div className="space-y-4">
@@ -66,19 +95,34 @@ export function PublicationList({
           </p>
         </div>
       ) : (
-        <div className={cn("space-y-2 transition-opacity", isFetching && "opacity-70")}>
+        <div className={cn("space-y-2 transition-opacity", isFetching && !isFetchingNextPage && "opacity-70")}>
           {publications.map((pub) => (
             <PublicationRow key={pub.id} pub={pub} />
           ))}
+
+          {hasNextPage && (
+            <div ref={sentinelRef} className="pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? "Loading…" : "Load more"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-async function fetchPublications(q: string, signal: AbortSignal): Promise<PublicationSummary[]> {
-  const res = await fetch(`/api/publications?q=${encodeURIComponent(q)}`, { signal });
+async function fetchPublications(q: string, offset: number, signal: AbortSignal): Promise<PublicationPage> {
+  const params = new URLSearchParams({ q, offset: String(offset), limit: String(PUBLICATIONS_PAGE_SIZE) });
+  const res = await fetch(`/api/publications?${params}`, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  return data.publications as PublicationSummary[];
+  return { publications: data.publications as PublicationSummary[], nextOffset: data.nextOffset ?? null };
 }

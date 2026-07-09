@@ -60,9 +60,15 @@ export async function GET(req: Request): Promise<NextResponse> {
     const q = url.searchParams.get("q") ?? undefined;
     const limitRaw = url.searchParams.get("limit");
     const limit = limitRaw !== null && limitRaw !== "" ? Number(limitRaw) : undefined;
+    const offsetRaw = url.searchParams.get("offset");
+    const offset = offsetRaw !== null && offsetRaw !== "" ? Number(offsetRaw) : 0;
 
-    const rows = listPublications({ q, limit });
-    return NextResponse.json({ publications: rows.map(toPublicationSummary) });
+    const rows = listPublications({ q, limit, offset });
+    // nextOffset is null on the last page (a short page means no more rows);
+    // a full page means there may be more, so hand back the cursor to continue.
+    const pageSize = limit ?? rows.length;
+    const nextOffset = pageSize > 0 && rows.length === pageSize ? offset + rows.length : null;
+    return NextResponse.json({ publications: rows.map(toPublicationSummary), nextOffset });
   } catch (err) {
     return toErrorResponse(err);
   }

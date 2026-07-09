@@ -1,10 +1,27 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PublicationList } from "@/components/publications/publication-list";
 import type { PublicationSummary } from "@/lib/publications";
+
+beforeEach(() => {
+  // jsdom has no IntersectionObserver; the list observes a sentinel for
+  // scroll-loading. A no-op stub lets the component mount; the "Load more"
+  // button drives pagination deterministically in tests.
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    },
+  );
+});
 
 afterEach(() => {
   cleanup();
@@ -32,11 +49,11 @@ function makePub(overrides: Partial<PublicationSummary> = {}): PublicationSummar
   };
 }
 
-function renderList(initial: PublicationSummary[]) {
+function renderList(initial: PublicationSummary[], initialNextOffset: number | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <PublicationList initialPublications={initial} />
+      <PublicationList initialPublications={initial} initialNextOffset={initialNextOffset} />
     </QueryClientProvider>,
   );
 }
@@ -119,5 +136,38 @@ describe("PublicationList", () => {
     expect(screen.getByText(/no publications yet/i)).toBeTruthy();
     // Sanity: an empty row list still renders the search box (feature is live).
     expect(within(document.body).getByRole("searchbox")).toBeTruthy();
+  });
+
+  it("loads the next page and appends rows when there is more", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const offset = new URL(String(input), "http://localhost").searchParams.get("offset");
+      // Page two (offset from the seeded first page); no more after it.
+      const rows = offset === "25" ? [makePub({ id: "p2", title: "Page Two Doc" })] : [];
+      return new Response(JSON.stringify({ publications: rows, nextOffset: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // A full first page (nextOffset=25) means "Load more" is offered.
+    renderList([makePub({ id: "p1", title: "Page One Doc" })], 25);
+
+    expect(screen.getByRole("link", { name: "Page One Doc" })).toBeTruthy();
+    const loadMore = screen.getByRole("button", { name: /load more/i });
+    fireEvent.click(loadMore);
+
+    // Page two appends; page one stays; the button disappears (nextOffset=null).
+    await screen.findByRole("link", { name: "Page Two Doc" });
+    expect(screen.getByRole("link", { name: "Page One Doc" })).toBeTruthy();
+    const calledPage2 = fetchMock.mock.calls.some(([u]) => String(u).includes("offset=25"));
+    expect(calledPage2).toBe(true);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /load more/i })).toBeNull());
+  });
+
+  it("offers no 'Load more' when the first page is the last", () => {
+    // A short first page (nextOffset=null) → no pagination control.
+    renderList([makePub({ id: "only", title: "Only Doc" })], null);
+    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
   });
 });
