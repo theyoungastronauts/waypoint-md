@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { QueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { publishEnabled } from "@/lib/publish/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,6 +17,9 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Server-driven capability gate (spec: mirrors the AI degradation contract):
+  // the Publications nav link only appears when R2 credentials are configured.
+  const publish = publishEnabled();
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
@@ -42,6 +46,14 @@ export default function RootLayout({
                     <Link href="/new" className="text-muted-foreground hover:text-foreground">
                       New
                     </Link>
+                    {publish && (
+                      <Link
+                        href="/publications"
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        Publications
+                      </Link>
+                    )}
                     <Link href="/settings" className="text-muted-foreground hover:text-foreground">
                       Settings
                     </Link>
