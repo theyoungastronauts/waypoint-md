@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAgent, type AgentMessage } from "./agent-store";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
+import { isPinnedToBottom } from "./scroll";
 
 /**
  * The document-scoped chat surface in the right rail (§14). Streams assistant
@@ -19,12 +20,23 @@ export function AgentPanel() {
   const { messages, streaming, error, send, stop } = useAgent();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Whether the chat is currently pinned to the bottom. We only auto-follow new
+  // and streaming messages while pinned, so a reader who scrolls up to re-read
+  // is not yanked back down; scrolling back to the bottom re-arms the follow.
+  // Starts true so a fresh conversation follows from the first turn.
+  const pinnedRef = useRef(true);
 
-  // Keep the newest turn in view as it streams. `scrollTo` is guarded because
-  // jsdom (test env) doesn't implement it on elements.
+  // Keep the newest turn in view as it streams, but only while pinned to the
+  // bottom. `scrollTo` is guarded because jsdom (test env) doesn't implement it.
   useEffect(() => {
+    if (!pinnedRef.current) return;
     scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight });
   }, [messages, streaming]);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (el) pinnedRef.current = isPinnedToBottom(el);
+  };
 
   const submit = () => {
     const text = input.trim();
@@ -35,7 +47,7 @@ export function AgentPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 space-y-3 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
             <p className="font-medium text-foreground">Ask about this document</p>

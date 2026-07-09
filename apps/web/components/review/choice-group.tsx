@@ -96,6 +96,21 @@ export function ChoiceGroup({
         })}
       </ul>
 
+      {selected.length > 0 && (
+        <div className="space-y-0.5">
+          <button
+            type="button"
+            onClick={() => commitSelection([])}
+            className="text-xs font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+          >
+            Clear selection
+          </button>
+          <p className="text-xs text-muted-foreground">
+            None of these — answer below instead.
+          </p>
+        </div>
+      )}
+
       <label className="block space-y-1">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Elaboration {options.length > 0 && <span className="font-normal normal-case">(optional)</span>}
