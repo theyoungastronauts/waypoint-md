@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { AttachFile } from "./attach-file";
+import { useCaretInsert } from "./caret-insert";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
 import { useDebouncedCallback } from "./use-debounced-callback";
@@ -32,17 +34,33 @@ export function QuestionCard({ itemId }: { itemId: string }) {
 
   const save = useDebouncedCallback((next: string) => saveContent(itemId, { text: next }), AUTOSAVE_DELAY_MS);
 
+  // Caret insert (Attach file, §14): drop the queued keystroke save so its older
+  // value can't clobber the splice, then persist the new value immediately.
+  const applyValue = useCallback(
+    (next: string) => {
+      save.cancel();
+      setText(next);
+      saveContent(itemId, { text: next });
+    },
+    [save, saveContent, itemId],
+  );
+  const { textareaRef, insertAtCaret } = useCaretInsert(applyValue);
+
   return (
-    <textarea
-      className={cn(textareaClass, "font-sans")}
-      placeholder="Type your answer…"
-      value={text}
-      onFocus={() => setFocused(itemId)}
-      onChange={(e) => {
-        setText(e.target.value);
-        save.call(e.target.value);
-      }}
-      onBlur={save.flush}
-    />
+    <div className="space-y-2">
+      <textarea
+        ref={textareaRef}
+        className={cn(textareaClass, "font-sans")}
+        placeholder="Type your answer…"
+        value={text}
+        onFocus={() => setFocused(itemId)}
+        onChange={(e) => {
+          setText(e.target.value);
+          save.call(e.target.value);
+        }}
+        onBlur={save.flush}
+      />
+      <AttachFile onInsert={insertAtCaret} />
+    </div>
   );
 }

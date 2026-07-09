@@ -1,8 +1,10 @@
 "use client";
 
 import type { Item } from "@waypoint/spec";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { AttachFile } from "./attach-file";
+import { useCaretInsert } from "./caret-insert";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
 import { useDebouncedCallback } from "./use-debounced-callback";
@@ -47,6 +49,18 @@ export function ChoiceGroup({
     (next: string) => saveContent(itemId, { other: next }),
     AUTOSAVE_DELAY_MS,
   );
+
+  // Caret insert (Attach file, §14): cancel the queued keystroke save so its
+  // older value can't clobber the splice, then persist the new value now.
+  const applyOther = useCallback(
+    (next: string) => {
+      saveOther.cancel();
+      setOther(next);
+      saveContent(itemId, { other: next });
+    },
+    [saveOther, saveContent, itemId],
+  );
+  const { textareaRef, insertAtCaret } = useCaretInsert(applyOther);
 
   const commitSelection = (next: string[]) => {
     setSelected(next);
@@ -111,26 +125,30 @@ export function ChoiceGroup({
         </div>
       )}
 
-      <label className="block space-y-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Elaboration {options.length > 0 && <span className="font-normal normal-case">(optional)</span>}
-        </span>
-        <textarea
-          className={textareaClass}
-          placeholder={
-            options.length > 0
-              ? "Add context, or answer in your own words instead of choosing…"
-              : "Type your answer…"
-          }
-          value={other}
-          onFocus={() => setFocused(itemId)}
-          onChange={(e) => {
-            setOther(e.target.value);
-            saveOther.call(e.target.value);
-          }}
-          onBlur={saveOther.flush}
-        />
-      </label>
+      <div className="space-y-2">
+        <label className="block space-y-1">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Elaboration {options.length > 0 && <span className="font-normal normal-case">(optional)</span>}
+          </span>
+          <textarea
+            ref={textareaRef}
+            className={textareaClass}
+            placeholder={
+              options.length > 0
+                ? "Add context, or answer in your own words instead of choosing…"
+                : "Type your answer…"
+            }
+            value={other}
+            onFocus={() => setFocused(itemId)}
+            onChange={(e) => {
+              setOther(e.target.value);
+              saveOther.call(e.target.value);
+            }}
+            onBlur={saveOther.flush}
+          />
+        </label>
+        <AttachFile onInsert={insertAtCaret} />
+      </div>
     </div>
   );
 }
