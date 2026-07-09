@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractTitle, sanitizeFilename } from "@/lib/publish/text";
+import { extractTitle, sanitizeFilename, stripFrontmatter } from "@/lib/publish/text";
 
 describe("sanitizeFilename (Smitty parity)", () => {
   it("lowercases and slugifies a normal name", () => {
@@ -44,5 +44,32 @@ describe("extractTitle (Smitty parity)", () => {
 
   it("falls back to the filename (minus .md) when there is no heading", () => {
     expect(extractTitle("no heading here\n\nbody", "my-file.md")).toBe("my-file");
+  });
+
+  it("ignores frontmatter and finds the body heading", () => {
+    const doc = "---\nname: waypoint\ndescription: a skill\n---\n\n# Waypoint review loop\n";
+    expect(extractTitle(doc, "SKILL.md")).toBe("Waypoint review loop");
+  });
+});
+
+describe("stripFrontmatter", () => {
+  it("removes a leading YAML frontmatter block", () => {
+    const doc = "---\nname: waypoint\ndescription: a skill\n---\n\n# Heading\n\nbody";
+    expect(stripFrontmatter(doc)).toBe("\n# Heading\n\nbody");
+  });
+
+  it("leaves frontmatter-free markdown byte-identical (Smitty parity)", () => {
+    const doc = "# Title\n\nSome prose with a --- inside.\n\n---\n\nmore";
+    expect(stripFrontmatter(doc)).toBe(doc);
+  });
+
+  it("does not treat a mid-document thematic break as frontmatter", () => {
+    const doc = "intro paragraph\n\n---\n\nafter the break";
+    expect(stripFrontmatter(doc)).toBe(doc);
+  });
+
+  it("handles CRLF frontmatter", () => {
+    const doc = "---\r\nwaypoint: 1\r\n---\r\n\r\n# Body";
+    expect(stripFrontmatter(doc)).toBe("\r\n# Body");
   });
 });

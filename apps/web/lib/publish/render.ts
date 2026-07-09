@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import { wrapHtml } from "./template";
+import { stripFrontmatter } from "./text";
 
 /**
  * The render half of the pipeline, ported from the Smitty `share` CLI
@@ -9,9 +10,11 @@ import { wrapHtml } from "./template";
  * puppeteer, imported lazily so cold routes never pay for Chromium.
  */
 
-/** Render markdown to the clean (bar-free) HTML document used for the PDF. */
+/** Render markdown to the clean (bar-free) HTML document used for the PDF.
+ *  Leading YAML frontmatter is stripped first — `marked` would otherwise render
+ *  it as a giant setext heading (the closing `---` underlines the metadata). */
 export function toHtml(markdown: string, title: string): string {
-  const bodyHtml = marked.parse(markdown, { gfm: true, breaks: false, async: false });
+  const bodyHtml = marked.parse(stripFrontmatter(markdown), { gfm: true, breaks: false, async: false });
   return wrapHtml(bodyHtml, title);
 }
 

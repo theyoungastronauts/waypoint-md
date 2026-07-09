@@ -23,12 +23,28 @@ export function sanitizeFilename(filePath: string): string {
 }
 
 /**
- * The document title: the first `# ` heading's text, else the filename without
- * its `.md` extension (Smitty `extractTitle`). `fallbackName` is the raw name to
- * fall back to (a filename or path); it is basename-and-`.md`-stripped to match.
+ * Strip a leading YAML frontmatter block (`---` … `---`) from markdown before it
+ * is rendered or scanned for a title. `marked` has no frontmatter support, so an
+ * unstripped block renders as a giant setext heading — the closing `---`
+ * underlines the metadata as an `<h2>`. Waypoint docs routinely carry
+ * frontmatter (`waypoint: 1`, a skill's `name`/`description`), so publish drops
+ * it from the rendered HTML/PDF; the uploaded `.md` keeps the original bytes.
+ * Only a block at the very start of the document is removed; a `---` thematic
+ * break elsewhere is untouched. Frontmatter-free input is returned unchanged, so
+ * every existing `share` object renders byte-identically.
+ */
+export function stripFrontmatter(markdown: string): string {
+  return markdown.replace(/^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/, "");
+}
+
+/**
+ * The document title: the first `# ` heading's text (after any frontmatter is
+ * stripped, so a `#` inside frontmatter can't be mistaken for it), else the
+ * filename without its `.md` extension (Smitty `extractTitle`). `fallbackName`
+ * is the raw name to fall back to; it is basename-and-`.md`-stripped to match.
  */
 export function extractTitle(markdown: string, fallbackName: string): string {
-  const match = markdown.match(/^#\s+(.+)$/m);
+  const match = stripFrontmatter(markdown).match(/^#\s+(.+)$/m);
   if (match) return match[1].trim();
   return path.basename(fallbackName, ".md");
 }
