@@ -107,15 +107,33 @@ export function ChoiceGroup({
                 {optionLabelsHtml[i] !== undefined ? (
                   // Inline markdown, sanitized server-side (W2): restores bold/code/
                   // links in labels. The label source string stays the value key.
-                  <span className="wp-prose-inline" dangerouslySetInnerHTML={{ __html: optionLabelsHtml[i] }} />
+                  // min-w-0 lets this flex item shrink so a long label wraps
+                  // instead of overflowing the card and being clipped to one line.
+                  <span
+                    className="wp-prose-inline min-w-0 flex-1"
+                    dangerouslySetInnerHTML={{ __html: optionLabelsHtml[i] }}
+                  />
                 ) : (
-                  <span>{option.label}</span>
+                  <span className="min-w-0 flex-1">{option.label}</span>
                 )}
               </label>
             </li>
           );
         })}
       </ul>
+
+      {selected.length > 0 && (
+        <div className="-mt-2 flex items-baseline gap-2">
+          <button
+            type="button"
+            onClick={() => commitSelection([])}
+            className="text-xs font-medium text-foreground/75 underline underline-offset-2 transition-colors hover:text-foreground"
+          >
+            Clear selection
+          </button>
+          <span className="text-xs text-muted-foreground">— none of these, answer below instead.</span>
+        </div>
+      )}
 
       {rationaleHtml && (
         // Author's "why this option" note (SPEC 1.1.0), read-only. It is context
@@ -132,22 +150,7 @@ export function ChoiceGroup({
         </div>
       )}
 
-      {selected.length > 0 && (
-        <div className="space-y-0.5">
-          <button
-            type="button"
-            onClick={() => commitSelection([])}
-            className="text-xs font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
-          >
-            Clear selection
-          </button>
-          <p className="text-xs text-muted-foreground">
-            None of these — answer below instead.
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="block space-y-1">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Elaboration {options.length > 0 && <span className="font-normal normal-case">(optional)</span>}

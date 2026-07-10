@@ -56,7 +56,7 @@ export function QuestionCard({
   const { textareaRef, insertAtCaret } = useCaretInsert(applyValue);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <textarea
         ref={textareaRef}
         className={cn(textareaClass, "font-sans")}
