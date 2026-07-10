@@ -93,10 +93,22 @@ export function analyzeDocument(raw: string): DocumentAnalysis {
     if (!markerMatch) return;
     const markerStart = start + markerMatch.index;
     const markerEnd = markerStart + 3;
-    // The label is the content after the "]", bounded to the checkbox's own line
-    // so a multi-line list item never folds a following block into the label.
-    const newline = raw.indexOf("\n", markerEnd);
-    const labelEnd = newline !== -1 && newline < end ? newline : end;
+    // The label runs to the end of the list item's FIRST block — the paragraph
+    // holding the checkbox and its text — so a soft-wrapped label that spans
+    // several source lines is captured in full. Using the paragraph end (not the
+    // whole list item) still keeps a nested sub-list or a following block, which
+    // are later children, out of the label. Falls back to the first line only
+    // when position info is missing. (Bounding to the marker's own line, as the
+    // F-1 fix once did, truncated multi-line labels — this restores them without
+    // touching the marker span, so checkbox-flip fidelity is unaffected.)
+    const firstBlockEnd = node.children?.[0]?.position?.end?.offset;
+    let labelEnd: number;
+    if (firstBlockEnd != null) {
+      labelEnd = Math.min(off(firstBlockEnd), end);
+    } else {
+      const newline = raw.indexOf("\n", markerEnd);
+      labelEnd = newline !== -1 && newline < end ? newline : end;
+    }
     taskItems.push({
       start,
       end,

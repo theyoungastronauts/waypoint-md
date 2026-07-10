@@ -160,6 +160,23 @@ describe("wp:rationale — author input, never review state (§5.3, SPEC 1.1.0)"
     );
   });
 
+  it("captures a soft-wrapped multi-line option label in full (not just the first line)", () => {
+    const parsed = parseDocument(fixture("choice-multiline-label.md"));
+    const labels = parsed.items[0].options?.map((o) => o.label) ?? [];
+    // The first option's label spans two source lines — both must be present.
+    expect(labels[0]).toContain("Add a source footnote");
+    expect(labels[0]).toContain("cites the two public budgets");
+    // The second too, across its wrapped continuation.
+    expect(labels[1]).toContain("Also annotate Friendship's budget");
+    expect(labels[1]).toContain("internally");
+    // A single-line option is unchanged.
+    expect(labels[3]).toBe("Drop to three rows.");
+    // Byte-fidelity is unaffected — labels are read-only, never written back.
+    expect(applyReview(fixture("choice-multiline-label.md"), {})).toBe(
+      fixture("choice-multiline-label.md"),
+    );
+  });
+
   it("a misplaced rationale (after wp:answer) never loosens the options scan past the answer", () => {
     // §5.3 places rationale before wp:answer; if an author misplaces it AFTER,
     // the options boundary must stay clamped at wp:answer so a `- [ ]` line in
