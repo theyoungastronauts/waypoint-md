@@ -95,6 +95,26 @@ describe("VoiceInput — listening → stop inserts the transcript", () => {
     expect(rec.abort).toHaveBeenCalled(); // mic torn down
   });
 
+  it("shows an explicit Done control — 'Listening…' is a status, not a button", () => {
+    render(<VoiceInput onInsert={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^voice input$/i }));
+
+    // The pulsing "Listening…" indicator must not be the (hidden) stop control.
+    expect(screen.queryByRole("button", { name: /listening/i })).toBeNull();
+    const done = screen.getByRole("button", { name: /stop voice input and insert/i });
+    expect(done.textContent).toBe("Done");
+  });
+
+  it("wraps the live preview instead of truncating it (long takes stay in bounds)", () => {
+    render(<VoiceInput onInsert={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^voice input$/i }));
+    MockRecognition.last!.emit([{ transcript: "a long interim take", isFinal: false }]);
+
+    const preview = screen.getByText("a long interim take");
+    expect(preview.className).not.toMatch(/truncate/);
+    expect(preview.className).toMatch(/break-words/);
+  });
+
   it("cancel discards the take without inserting", () => {
     const onInsert = vi.fn();
     render(<VoiceInput onInsert={onInsert} />);

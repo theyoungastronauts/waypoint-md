@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { DictationWaveform } from "./dictation-waveform";
 import { useDictation } from "./use-dictation";
 
@@ -45,6 +45,14 @@ export function VoiceInput({ onInsert }: { onInsert: (text: string) => void }) {
     onTranscript: onInsert,
   });
 
+  // The live preview wraps but is height-capped; keep it pinned to the newest
+  // words as the transcript grows past the cap.
+  const previewRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    const node = previewRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [liveText]);
+
   // While listening, Escape discards the take (mirrors the modal-dismiss habit
   // elsewhere). Scoped to the listening state so it never swallows Escape while
   // the reviewer is just typing.
@@ -65,30 +73,38 @@ export function VoiceInput({ onInsert }: { onInsert: (text: string) => void }) {
 
   if (state === "listening") {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+            <MicIcon className="animate-pulse" />
+            <span>Listening…</span>
+          </span>
+          {analyser && <DictationWaveform analyser={analyser} />}
           <button
             type="button"
             onClick={stop}
             aria-label="Stop voice input and insert"
-            title="Stop and insert · Esc to cancel"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+            title="Insert transcript"
+            className="text-xs font-medium text-primary underline underline-offset-2 transition-colors hover:text-primary/80"
           >
-            <MicIcon className="animate-pulse" />
-            <span>Listening…</span>
+            Done
           </button>
-          {analyser && <DictationWaveform analyser={analyser} />}
           <button
             type="button"
             onClick={cancel}
             aria-label="Cancel voice input"
+            title="Discard · Esc"
             className="text-xs font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
           >
             Cancel
           </button>
         </div>
         {liveText && (
-          <p aria-live="polite" className="truncate text-xs italic text-muted-foreground">
+          <p
+            ref={previewRef}
+            aria-live="polite"
+            className="max-h-20 overflow-y-auto text-xs italic break-words whitespace-pre-wrap text-muted-foreground"
+          >
             {liveText}
           </p>
         )}
