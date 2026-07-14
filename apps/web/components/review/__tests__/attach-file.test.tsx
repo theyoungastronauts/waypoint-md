@@ -71,7 +71,8 @@ describe("Attach file — normalized path at the caret (decision B-5)", () => {
   it("inserts a normalized ~/ path into an empty text answer and autosaves", async () => {
     renderWith(<QuestionCard itemId={ITEM_ID} />, textInit(null));
 
-    fireEvent.click(screen.getByRole("button", { name: /attach file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add file\/folder$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /type a path instead/i }));
     fireEvent.change(screen.getByLabelText(/file path to attach/i), {
       target: { value: "/Users/tester/prj/foo.ts" },
     });
@@ -89,7 +90,8 @@ describe("Attach file — normalized path at the caret (decision B-5)", () => {
     const textarea = screen.getByPlaceholderText(/type your answer/i) as HTMLTextAreaElement;
     expect(textarea.value).toBe("AB");
 
-    fireEvent.click(screen.getByRole("button", { name: /attach file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add file\/folder$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /type a path instead/i }));
     // Caret between "A" and "B"; the retained selection is read at insert time.
     textarea.focus();
     textarea.setSelectionRange(1, 1);
@@ -105,7 +107,8 @@ describe("Attach file — normalized path at the caret (decision B-5)", () => {
   it("leaves a path outside home absolute", async () => {
     renderWith(<QuestionCard itemId={ITEM_ID} />, textInit(null));
 
-    fireEvent.click(screen.getByRole("button", { name: /attach file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add file\/folder$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /type a path instead/i }));
     fireEvent.change(screen.getByLabelText(/file path to attach/i), {
       target: { value: "/etc/hosts" },
     });
@@ -121,7 +124,8 @@ describe("Attach file — normalized path at the caret (decision B-5)", () => {
       choiceInit(null),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /attach file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add file\/folder$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /type a path instead/i }));
     fireEvent.change(screen.getByLabelText(/file path to attach/i), {
       target: { value: "/Users/tester/notes.md" },
     });
@@ -139,11 +143,12 @@ describe("Attach file — normalized path at the caret (decision B-5)", () => {
   it("dismisses without inserting when nothing beyond the ~/ seed is entered", () => {
     renderWith(<QuestionCard itemId={ITEM_ID} />, textInit(null));
 
-    fireEvent.click(screen.getByRole("button", { name: /attach file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add file\/folder$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /type a path instead/i }));
     fireEvent.click(screen.getByRole("button", { name: /^insert$/i }));
 
     // Back to the collapsed affordance; the answer stays empty and nothing saved.
-    expect(screen.getByRole("button", { name: /attach file/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^add file\/folder$/i })).toBeTruthy();
     expect((screen.getByPlaceholderText(/type your answer/i) as HTMLTextAreaElement).value).toBe("");
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/items/"))).toBe(false);
   });
