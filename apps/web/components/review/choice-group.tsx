@@ -10,6 +10,7 @@ import { useCaretInsert } from "./caret-insert";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
 import { useDebouncedCallback } from "./use-debounced-callback";
+import { VoiceInput } from "./voice-input";
 
 const AUTOSAVE_DELAY_MS = 800;
 
@@ -174,7 +175,10 @@ export function ChoiceGroup({
           />
         </label>
         <AttachmentRow attachments={images.attachments} onRemove={images.remove} error={images.error} />
-        <AttachFile onInsert={insertAtCaret} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <AttachFile onInsert={insertAtCaret} />
+          <VoiceInput onInsert={insertAtCaret} />
+        </div>
       </div>
     </div>
   );
