@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { AttachFile } from "./attach-file";
 import { AttachmentRow, useImageAttachments } from "./attachment-row";
 import { useCaretInsert } from "./caret-insert";
+import { ClearText } from "./clear-text";
 import { useFocus } from "./focus-context";
 import { useResponses } from "./responses-store";
 import { useDebouncedCallback } from "./use-debounced-callback";
@@ -75,6 +76,13 @@ export function QuestionCard({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <AttachFile onInsert={insertAtCaret} />
         <VoiceInput onInsert={insertAtCaret} />
+        <ClearText
+          value={text}
+          onClear={() => {
+            applyValue("");
+            textareaRef.current?.focus();
+          }}
+        />
       </div>
     </div>
   );
