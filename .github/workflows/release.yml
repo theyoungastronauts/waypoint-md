@@ -36,6 +36,10 @@ jobs:
   publish:
     needs: gates
     runs-on: ubuntu-latest
+    # The secrets context is not allowed in step-level `if` (it fails the whole
+    # workflow file at parse time) — expose the token via job env and gate on that.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -69,7 +73,7 @@ jobs:
       # this repo, so this step is a no-op recipe until the deliberate release
       # flip in docs/RELEASING.md; npm refuses to publish a private package.
       - name: Publish waypoint-md
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: ${{ env.NPM_TOKEN != '' }}
         working-directory: packages/cli
         run: npm publish --access public
         env:
