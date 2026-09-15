@@ -2,13 +2,16 @@ import { randomUUID } from "node:crypto";
 import {
   getPublication,
   insertPublication,
+  isMediaRow,
   publicationExists,
   stampRevoked,
   type PublicationRow,
 } from "../publications";
 import { getR2Config } from "./config";
+import { mediaKeysFor } from "./media";
 import { R2_PREFIX, r2FolderFor } from "./paths";
 import {
+  deleteObjects,
   deletePublicationObjects,
   getObjectText,
   listShareObjects,
@@ -78,14 +81,21 @@ export async function publish(input: PublishInput): Promise<PublicationRow> {
 }
 
 /**
- * Revoke a publication: delete its three R2 objects and stamp `revoked_at`
- * (idempotent — re-revoking deletes nothing new and keeps the first timestamp).
- * Returns the row, or null when there is no such publication.
+ * Revoke a publication: delete its R2 objects and stamp `revoked_at` (idempotent
+ * — re-revoking deletes nothing new and keeps the first timestamp). A markdown
+ * publication owns three objects; a media publication owns its file and, when it
+ * has one, the manifest beside it (B-2). Returns the row, or null when there is
+ * no such publication.
  */
 export async function revoke(id: string): Promise<PublicationRow | null> {
   const row = getPublication(id);
   if (!row) return null;
-  await deletePublicationObjects(row.r2Folder, row.sanitizedName);
+  if (isMediaRow(row)) {
+    const keys = mediaKeysFor(row);
+    await deleteObjects([keys.file, keys.manifest]);
+  } else {
+    await deletePublicationObjects(row.r2Folder, row.sanitizedName);
+  }
   return stampRevoked(id);
 }
 

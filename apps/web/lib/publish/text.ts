@@ -23,6 +23,24 @@ export function sanitizeFilename(filePath: string): string {
 }
 
 /**
+ * A media filename without its directory or extension — `renders/vBTC v2.mp4`
+ * → `vBTC v2`. The markdown path strips only `.md` (that is the only extension
+ * it ever sees); media arrives as `.mp4`, `.mov`, `.pdf` and friends, so the
+ * real extension has to come off before the name is slugified or used as a title.
+ */
+export function mediaStem(filename: string): string {
+  const base = path.basename(filename);
+  const ext = path.extname(base);
+  // A dotfile with no extension (`.manifest`) keeps its whole name.
+  return ext && ext !== base ? base.slice(0, base.length - ext.length) : base;
+}
+
+/** The object base name for a media publication: {@link mediaStem}, slugified. */
+export function sanitizeMediaName(filename: string): string {
+  return sanitizeFilename(mediaStem(filename));
+}
+
+/**
  * Strip a leading YAML frontmatter block (`---` … `---`) from markdown before it
  * is rendered or scanned for a title. `marked` has no frontmatter support, so an
  * unstripped block renders as a giant setext heading — the closing `---`

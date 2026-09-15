@@ -37,3 +37,47 @@ export function publicationUrls(
   const url = (ext: PublicationExt) => `https://${publicBase}/${objectKey(r2Folder, sanitizedName, ext)}`;
   return { html: url("html"), pdf: url("pdf"), md: url("md") };
 }
+
+/**
+ * A media publication lands two objects in the same folder layout: the file
+ * itself and, when the publisher supplied one, the render manifest beside it —
+ * so a share folder stays self-describing (spec §Phase B, "Object layout").
+ * The extension is the canonical one for the content type, not whatever the
+ * source file happened to be called, so a key and its public URL are both a pure
+ * function of the row and can never drift.
+ */
+export function mediaObjectKey(r2Folder: string, sanitizedName: string, ext: string): string {
+  return `${r2Folder}/${sanitizedName}.${ext}`;
+}
+
+/** The manifest object key: `<r2Folder>/<sanitizedName>.manifest.json`. */
+export function manifestObjectKey(r2Folder: string, sanitizedName: string): string {
+  return `${r2Folder}/${sanitizedName}.manifest.json`;
+}
+
+export interface MediaUrls {
+  file: string;
+  /** Null when the publication carries no render manifest. */
+  manifest: string | null;
+}
+
+/** The public URLs for a media publication's file and (optional) manifest. */
+export function mediaUrls(
+  publicBase: string,
+  r2Folder: string,
+  sanitizedName: string,
+  ext: string,
+  hasManifest: boolean,
+): MediaUrls {
+  return {
+    file: `https://${publicBase}/${mediaObjectKey(r2Folder, sanitizedName, ext)}`,
+    manifest: hasManifest
+      ? `https://${publicBase}/${manifestObjectKey(r2Folder, sanitizedName)}`
+      : null,
+  };
+}
+
+/** The tailnet detail page for a publication — relative, as `/d/:id` is (§8). */
+export function publicationPagePath(id: string): string {
+  return `/publications/${id}`;
+}

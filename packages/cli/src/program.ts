@@ -81,21 +81,47 @@ export function createProgram(version: string, io: IO = consoleIo): Command {
 
   program
     .command("publish")
-    .description("Render a markdown file to HTML + PDF, upload to R2, and index it")
-    .argument("[file]", "path to the markdown file")
+    .description("Publish a markdown file (rendered to HTML + PDF) or a media file to R2")
+    .argument("[file]", "path to the markdown, video, image, or PDF file")
     .option("-u, --url <url>", "server URL")
     .option("-t, --title <title>", "document title")
+    .option("-g, --group <group>", "media: the material slug a version stack shares")
+    .option("-l, --label <label>", "media: the version label within the group (v1, draft, …)")
+    .option("--manifest <path>", "media: render manifest JSON (default: <file>.manifest.json)")
+    .option("--json", "print the result as one JSON object and nothing else on stdout")
     .option("--backfill", "index existing R2 objects into the registry instead of publishing")
-    .action(async (file: string | undefined, opts: CommonOpts & { title?: string; backfill?: boolean }) => {
-      if (opts.backfill) {
-        await runBackfill(deps(opts, io));
-        return;
-      }
-      if (!file) {
-        throw new CliError("Nothing to publish. Provide a <file>, or use --backfill.");
-      }
-      await runPublish(file, { title: opts.title }, deps(opts, io));
-    });
+    .action(
+      async (
+        file: string | undefined,
+        opts: CommonOpts & {
+          title?: string;
+          group?: string;
+          label?: string;
+          manifest?: string;
+          json?: boolean;
+          backfill?: boolean;
+        },
+      ) => {
+        if (opts.backfill) {
+          await runBackfill(deps(opts, io));
+          return;
+        }
+        if (!file) {
+          throw new CliError("Nothing to publish. Provide a <file>, or use --backfill.");
+        }
+        await runPublish(
+          file,
+          {
+            title: opts.title,
+            group: opts.group,
+            label: opts.label,
+            manifest: opts.manifest,
+            json: opts.json,
+          },
+          deps(opts, io),
+        );
+      },
+    );
 
   program
     .command("status")

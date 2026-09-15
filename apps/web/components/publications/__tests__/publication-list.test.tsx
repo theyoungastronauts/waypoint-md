@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PublicationList } from "@/components/publications/publication-list";
-import type { PublicationSummary } from "@/lib/publications";
+import type { MarkdownPublicationSummary, PublicationSummary } from "@/lib/publications";
 
 beforeEach(() => {
   // jsdom has no IntersectionObserver; the list observes a sentinel for
@@ -33,10 +33,11 @@ function urls(id: string, name: string) {
   return { html: `${base}.html`, pdf: `${base}.pdf`, md: `${base}.md` };
 }
 
-function makePub(overrides: Partial<PublicationSummary> = {}): PublicationSummary {
+function makePub(overrides: Partial<MarkdownPublicationSummary> = {}): PublicationSummary {
   const id = overrides.id ?? "id-1";
   return {
     id,
+    kind: "markdown",
     title: "Alpha Doc",
     sanitizedName: "alpha-doc",
     origin: "cli",

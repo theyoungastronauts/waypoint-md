@@ -5,15 +5,26 @@ import { relativeTime } from "@/lib/format";
 import type { PublicationSummary } from "@/lib/publications";
 import { cn } from "@/lib/utils";
 import { ArtifactLinks } from "./artifact-links";
-import { originLabel } from "./labels";
+import { kindLabel, originLabel } from "./labels";
+import { MediaLinks } from "./media-links";
 
 /**
- * One registry row: title (links to detail), origin + source-host + relative
- * time, and the three artifact links. Revoked rows still appear — the registry
- * remembers — but read as revoked: muted, badged, and their artifact links go
- * dead (see {@link ArtifactLinks}).
+ * One registry row: title (links to detail), a kind badge, origin +
+ * source-host + relative time, and the publication's artifact links — the three
+ * rendered files for markdown, the file and manifest for media (decision B-4).
+ * A media row also carries `group · label`, which is how a version stack reads
+ * at a glance. Revoked rows still appear — the registry remembers — but read as
+ * revoked: muted, badged, and their artifact links go dead.
  */
 export function PublicationRow({ pub }: { pub: PublicationSummary }) {
+  const media = pub.kind === "media" ? pub : null;
+  const links =
+    pub.kind === "media" ? (
+      <MediaLinks urls={pub.urls} revoked={pub.revoked} className="shrink-0" />
+    ) : (
+      <ArtifactLinks urls={pub.urls} revoked={pub.revoked} className="shrink-0" />
+    );
+
   return (
     <div
       className={cn(
@@ -30,6 +41,16 @@ export function PublicationRow({ pub }: { pub: PublicationSummary }) {
             {pub.title || "Untitled publication"}
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge>{kindLabel(pub.kind, media?.contentType ?? null)}</Badge>
+            {media && (media.group || media.label) && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="font-mono">
+                  {[media.group, media.label].filter(Boolean).join(" · ")}
+                </span>
+              </>
+            )}
+            <span aria-hidden>·</span>
             <Badge variant="outline">{originLabel(pub.origin)}</Badge>
             {pub.sourceHost && (
               <>
@@ -47,7 +68,7 @@ export function PublicationRow({ pub }: { pub: PublicationSummary }) {
             )}
           </div>
         </div>
-        <ArtifactLinks urls={pub.urls} revoked={pub.revoked} className="shrink-0" />
+        {links}
       </div>
     </div>
   );

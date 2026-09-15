@@ -144,13 +144,41 @@ export const settings = sqliteTable("settings", {
  * backfill is idempotent by primary key. The three object keys and public URLs
  * derive from `r2_folder + sanitized_name + public_base`. A companion
  * `publications_fts` FTS5 virtual table (raw-SQL migration, trigger-synced)
- * indexes `(title, source_md)` for the registry search.
+ * indexes `(title, source_md, search_text)` for the registry search.
+ *
+ * Phase B adds a second `kind`: a **media** publication (a render, still, or
+ * PDF). Its bytes never pass through the server — the CLI PUTs them straight to
+ * R2 through a presigned URL and then finalizes the row — so a media row carries
+ * `content_type`, `bytes`, the render `manifest_json`, and a `finalized_at`
+ * stamp instead of source markdown. `source_md` stays NOT NULL (media rows store
+ * `''`) so the FTS triggers need no null handling; `search_text` carries the
+ * derived text an author would search a render by (group, label, composition).
  */
 export const publications = sqliteTable("publications", {
   id: id(),
   title: text("title").notNull(),
   sanitizedName: text("sanitized_name").notNull(),
+  /** The published markdown for `kind = "markdown"`; `''` for media rows. */
   sourceMd: text("source_md").notNull(),
+  /** markdown | media */
+  kind: text("kind").notNull().default("markdown"),
+  /** Media only: the uploaded object's MIME type (from the upload allowlist). */
+  contentType: text("content_type"),
+  /** Media only: the object size in bytes, confirmed by the finalize HEAD. */
+  bytes: integer("bytes"),
+  /**
+   * Media only: the material slug a version stack shares (e.g. `vbtc-unwrapped`).
+   * Named `group_slug` because `group` is a SQL keyword.
+   */
+  groupSlug: text("group_slug"),
+  /** Media only: the version label within the group (`v1`, `draft`, …). */
+  label: text("label"),
+  /** Media only: the render manifest, as published alongside the object. */
+  manifestJson: text("manifest_json", { mode: "json" }),
+  /** Derived searchable text (group, label, manifest summary); `''` for markdown. */
+  searchText: text("search_text").notNull().default(""),
+  /** Media only: set once the presigned upload is confirmed present on R2. */
+  finalizedAt: text("finalized_at"),
   /** `smitty/shares/<id>` — the immutable object prefix for this publication. */
   r2Folder: text("r2_folder").notNull(),
   /** The public domain at publish time (e.g. `dropzone.tylersavery.com`). */

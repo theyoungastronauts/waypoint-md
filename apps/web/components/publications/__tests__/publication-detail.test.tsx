@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PublicationDetailView } from "@/components/publications/publication-detail-view";
-import type { PublicationDetail } from "@/lib/publications";
+import type { MarkdownPublicationDetail, PublicationDetail } from "@/lib/publications";
 
 afterEach(() => {
   cleanup();
@@ -19,11 +19,12 @@ function renderDetail(ui: ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-function makeDetail(overrides: Partial<PublicationDetail> = {}): PublicationDetail {
+function makeDetail(overrides: Partial<MarkdownPublicationDetail> = {}): PublicationDetail {
   const id = overrides.id ?? "pub-1";
   const base = `https://dropzone.tylersavery.com/smitty/shares/${id}/plan`;
   return {
     id,
+    kind: "markdown",
     title: "The Plan",
     sanitizedName: "plan",
     origin: "cli",

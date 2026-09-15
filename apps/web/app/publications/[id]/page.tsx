@@ -36,8 +36,9 @@ export default async function PublicationDetailPage({ params }: PageProps) {
 
   const detail = toPublicationDetail(row);
   // Render the source markdown server-side through the shared sanitize pipeline;
-  // the client detail view only needs the (already-safe) HTML string.
-  const bodyHtml = renderMarkdownToSafeHtml(detail.sourceMd);
+  // the client detail view only needs the (already-safe) HTML string. A media
+  // publication has no source markdown — it renders a player instead.
+  const bodyHtml = detail.kind === "markdown" ? renderMarkdownToSafeHtml(detail.sourceMd) : undefined;
 
   return (
     <section className="mx-auto w-full max-w-3xl">

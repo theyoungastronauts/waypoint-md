@@ -156,12 +156,39 @@ waypoint open
 
 # pull the annotated review beside the source, mark it pulled, clear the pointer
 waypoint pull [--latest] [--digest]
+
+# publish a permanent artifact to R2 and index it in the registry
+waypoint publish docs/plan.md                      # markdown → HTML + PDF + .md
+waypoint publish out/spot.mp4 --group vbtc --label v2   # media → one object
 ```
 
 Config resolves flags → env (`WAYPOINT_URL`, `WAYPOINT_TOKEN`) → `.waypoint.json`
 → `~/.waypoint/config.json`. If the server is unreachable, `push` queues the
 payload in `~/.waypoint/outbox/` and never hard-fails; `waypoint push --flush`
 retries.
+
+### Publishing media
+
+`publish` dispatches on extension. A markdown file takes the original path: the
+server renders it to HTML and PDF and uploads all three artifacts. A video,
+image, or PDF (`.mp4 .mov .webm .png .jpg .jpeg .pdf`, up to 4 GiB) takes the
+media path instead — the server mints a presigned R2 upload, the CLI streams the
+file straight to the bucket, and a finalize call confirms it landed. The bytes
+never pass through Waypoint, so a 250 MB render publishes from anywhere the
+bucket is reachable.
+
+| Flag | Effect |
+|---|---|
+| `--group <slug>` | The material a version stack shares (`vbtc-unwrapped`). |
+| `--label <label>` | The version within that group (`v1`, `draft`). |
+| `--manifest <path>` | The render manifest to publish beside the file. Defaults to `<file>.manifest.json` when that exists. |
+| `--json` | Print `{ id, title, kind, urls }` and nothing else on stdout. |
+
+Group, label, and the manifest's composition, profile, and format all feed the
+registry's full-text search, so `waypoint publish`ed renders are findable by what
+they are rather than only by title. Publishing needs the same R2 credentials as
+markdown publishing; with none set, every publish endpoint answers
+`publish_unavailable` and the Publications section stays hidden.
 
 ## Onboarding an agent (the Waypoint skill)
 
