@@ -92,16 +92,16 @@ The `@waypoint/spec` byte-fidelity invariant (`applyReview(raw, {}) === raw`; ro
 
 ### Tasks
 
-- [ ] **Migration 0004:** `review_links`, `media_comments` per C-1 and C-2, with indexes on `(publication_id)`, `(token)`, `(publication_id, resolved_at)`.
-- [ ] **`lib/review/links.ts`:** create (32-byte token), list, revoke, `resolveLink(token, publicationId)` with group scoping and constant-time comparison, `touchLastSeen`. Tests: group scoping across versions, revoked link, wrong publication, timing-safe compare used.
-- [ ] **`lib/review/comments.ts`:** add (plain text, 4 KB cap, timecode and region validation), list (public and author views), resolve/unresolve. `lib/review/rate-limit.ts`: in-memory buckets per IP and per link with tests that use an injected clock.
-- [ ] **Middleware:** prefix open paths `/r/` and `/api/r/`; tests prove `/r/x`, `/api/r/x/comments` pass without a token and `/api/publications`, `/d/x`, `/publications` still require one.
-- [ ] **Public routes and page (C-3):** `app/r/[id]/page.tsx`, `app/api/r/[id]/route.ts`, `app/api/r/[id]/comments/route.ts`, `components/review-public/media-review.tsx` (+ player, timecode chip, composers, region-mark overlay, comment list, version switcher). Region marks: pause the video, drag on an overlay, store `{x,y,w,h}` fractions relative to the media box, render saved marks as outlines when the playhead is within 0.5 s of the comment's timecode or when the comment is tapped. Route tests: 404 on bad/revoked/mismatched `k`, comment creation attributes the link's name and ignores any name in the body, cap and rate limit enforced, versions list scoped to the group.
-- [ ] **Authoring routes and panels (C-4).** Tests for each route's auth (covered by the middleware) and behavior.
-- [ ] **Media digest (C-5):** `lib/media-digest.ts` + snapshot tests (general note, timecoded note, region note, resolved filtering, ordering); export route; SPEC.md §9.4; `SPEC_VERSION` and the CLI's expected version to 1.2.0; a digest fixture under `packages/spec` golden fixtures is not needed (the media digest lives in `apps/web`), but `packages/spec` tests must stay untouched and green.
-- [ ] **CLI (C-6):** `pull` fallback to publications, `links`, `resolve`, `status --publications`, `client.ts` wrappers. Tests for each command's output and error paths.
-- [ ] **Ops doc (C-7)** and **skill update (C-8).**
-- [ ] **README:** `WAYPOINT_REVIEW_PUBLIC_URL` in the env table; a "Public review links" paragraph noting the tunnel restricts the public surface to `/r/*` and `/api/r/*`.
+- [x] **Migration 0004:** `review_links`, `media_comments` per C-1 and C-2, with indexes on `(publication_id)`, `(token)`, `(publication_id, resolved_at)`.
+- [x] **`lib/review/links.ts`:** create (32-byte token), list, revoke, `resolveLink(token, publicationId)` with group scoping and constant-time comparison, `touchLastSeen`. Tests: group scoping across versions, revoked link, wrong publication, timing-safe compare used.
+- [x] **`lib/review/comments.ts`:** add (plain text, 4 KB cap, timecode and region validation), list (public and author views), resolve/unresolve. `lib/review/rate-limit.ts`: in-memory buckets per IP and per link with tests that use an injected clock.
+- [x] **Middleware:** prefix open paths `/r/` and `/api/r/`; tests prove `/r/x`, `/api/r/x/comments` pass without a token and `/api/publications`, `/d/x`, `/publications` still require one.
+- [x] **Public routes and page (C-3):** `app/r/[id]/page.tsx`, `app/api/r/[id]/route.ts`, `app/api/r/[id]/comments/route.ts`, `components/review-public/media-review.tsx` (+ player, timecode chip, composers, region-mark overlay, comment list, version switcher). Region marks: pause the video, drag on an overlay, store `{x,y,w,h}` fractions relative to the media box, render saved marks as outlines when the playhead is within 0.5 s of the comment's timecode or when the comment is tapped. Route tests: 404 on bad/revoked/mismatched `k`, comment creation attributes the link's name and ignores any name in the body, cap and rate limit enforced, versions list scoped to the group.
+- [x] **Authoring routes and panels (C-4).** Tests for each route's auth (covered by the middleware) and behavior.
+- [x] **Media digest (C-5):** `lib/media-digest.ts` + snapshot tests (general note, timecoded note, region note, resolved filtering, ordering); export route; SPEC.md §9.4; `SPEC_VERSION` and the CLI's expected version to 1.2.0; a digest fixture under `packages/spec` golden fixtures is not needed (the media digest lives in `apps/web`), but `packages/spec` tests must stay untouched and green.
+- [x] **CLI (C-6):** `pull` fallback to publications, `links`, `resolve`, `status --publications`, `client.ts` wrappers. Tests for each command's output and error paths.
+- [x] **Ops doc (C-7)** and **skill update (C-8).**
+- [x] **README:** `WAYPOINT_REVIEW_PUBLIC_URL` in the env table; a "Public review links" paragraph noting the tunnel restricts the public surface to `/r/*` and `/api/r/*`.
 
 ### Exit criteria
 

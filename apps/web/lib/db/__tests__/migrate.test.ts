@@ -21,6 +21,8 @@ const EXPECTED_TABLES = [
   "settings",
   "publications",
   "attachments",
+  "review_links",
+  "media_comments",
 ];
 
 const EXPECTED_TRIGGERS = ["publications_fts_ai", "publications_fts_ad", "publications_fts_au"];
@@ -213,5 +215,93 @@ describe("migration 0003 — media columns and the rebuilt FTS index", () => {
 
     db.prepare("DELETE FROM publications WHERE id = 'm2'").run();
     expect(matches("egret")).toBe(0);
+  });
+});
+
+/**
+ * Migration 0004 (public video review) adds two tables and no data rewrite, so
+ * what needs proving is the shape: the indexes decision C-1/C-2 name exist, the
+ * token is actually unique (the whole capability model rests on it), and a
+ * comment cannot reference a publication that is not there.
+ */
+describe("migration 0004 — review links and media comments", () => {
+  let dir: string;
+  let db: Database.Database;
+
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "waypoint-migrate-0004-"));
+    db = new Database(path.join(dir, "waypoint.db"));
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    migrate(drizzle(db), { migrationsFolder });
+    db.prepare(
+      `INSERT INTO publications
+         (id, title, sanitized_name, source_md, kind, content_type, search_text,
+          r2_folder, public_base, origin, created_at, finalized_at)
+       VALUES ('pub-1', 'Render', 'render', '', 'media', 'video/mp4', '',
+               'smitty/shares/pub-1', 'dropzone.tylersavery.com', 'cli',
+               '2026-09-15T00:00:00.000Z', '2026-09-15T00:01:00.000Z')`,
+    ).run();
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("creates the indexes the lookups depend on", () => {
+    const names = (
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as Array<{
+        name: string;
+      }>
+    ).map((r) => r.name);
+    for (const index of [
+      "review_links_token_idx",
+      "review_links_publication_idx",
+      "media_comments_publication_idx",
+      "media_comments_unresolved_idx",
+    ]) {
+      expect(names).toContain(index);
+    }
+  });
+
+  it("refuses two links with the same token", () => {
+    const insert = db.prepare(
+      `INSERT INTO review_links (id, publication_id, reviewer_name, token, created_at)
+       VALUES (?, 'pub-1', ?, ?, '2026-09-15T00:00:00.000Z')`,
+    );
+    insert.run("link-1", "Jay", "deadbeef");
+    expect(() => insert.run("link-2", "Aaron", "deadbeef")).toThrow(/UNIQUE/i);
+  });
+
+  it("holds a comment's anchor, region, and nullable link, and enforces its keys", () => {
+    db.prepare(
+      `INSERT INTO media_comments
+         (id, publication_id, review_link_id, author_name, timecode_ms, region, body, created_at)
+       VALUES ('c-1', 'pub-1', 'link-1', 'Jay', 12400, '{"x":0.1,"y":0.2,"w":0.3,"h":0.4}',
+               'the wordmark lands too late here', '2026-09-15T00:02:00.000Z')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO media_comments (id, publication_id, author_name, body, created_at)
+       VALUES ('c-2', 'pub-1', 'Tyler', 'author-side note', '2026-09-15T00:03:00.000Z')`,
+    ).run();
+
+    const rows = db
+      .prepare("SELECT * FROM media_comments ORDER BY id")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    expect(rows[0].timecode_ms).toBe(12400);
+    expect(JSON.parse(String(rows[0].region))).toEqual({ x: 0.1, y: 0.2, w: 0.3, h: 0.4 });
+    expect(rows[1].review_link_id).toBeNull();
+    expect(rows[1].resolved_at).toBeNull();
+
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO media_comments (id, publication_id, author_name, body, created_at)
+           VALUES ('c-3', 'missing-publication', 'Jay', 'x', '2026-09-15T00:04:00.000Z')`,
+        )
+        .run(),
+    ).toThrow(/FOREIGN KEY/i);
   });
 });

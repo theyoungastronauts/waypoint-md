@@ -100,6 +100,7 @@ For local development with hot reload, use `pnpm dev` instead (runs
 | `ANTHROPIC_API_KEY` | Enables the AI sidebar + adoptive import; unset = those features are hidden | unset |
 | `WAYPOINT_MODEL` | Default sidebar model (changeable at runtime in `/settings`) | `claude-sonnet-5` |
 | `WAYPOINT_MIGRATIONS_DIR` | Absolute path to the drizzle migrations folder (needed for the non-Docker standalone start) | `./drizzle` |
+| `WAYPOINT_REVIEW_PUBLIC_URL` | Public base URL for review links (e.g. `https://review.example.com`); unset = links render as relative paths | unset |
 
 Secrets (`WAYPOINT_TOKEN`, `ANTHROPIC_API_KEY`) live in env only — never in the DB
 or client bundles. Copy [`.env.example`](.env.example) to `.env` to fill them in;
@@ -160,6 +161,12 @@ waypoint pull [--latest] [--digest]
 # publish a permanent artifact to R2 and index it in the registry
 waypoint publish docs/plan.md                      # markdown → HTML + PDF + .md
 waypoint publish out/spot.mp4 --group vbtc --label v2   # media → one object
+
+# share a render for review, then act on what comes back
+waypoint links <publication-id> --add "Jay"        # one link per reviewer
+waypoint status --publications                     # what is published, what is unresolved
+waypoint pull <publication-id> --digest            # the notes, as <name>.digest.md
+waypoint resolve <publication-id> c3               # mark one note acted on
 ```
 
 Config resolves flags → env (`WAYPOINT_URL`, `WAYPOINT_TOKEN`) → `.waypoint.json`
@@ -189,6 +196,33 @@ registry's full-text search, so `waypoint publish`ed renders are findable by wha
 they are rather than only by title. Publishing needs the same R2 credentials as
 markdown publishing; with none set, every publish endpoint answers
 `publish_unavailable` and the Publications section stays hidden.
+
+### Public review links
+
+A published render can be reviewed by someone who is not on the tailnet. The
+publication page mints **one link per reviewer** — `https://<review host>/r/<id>?k=<token>`
+— and the name on the link is the name on every note left through it, so
+attribution cannot be spoofed by anyone who has the URL. The page plays the
+render on a phone and takes notes at a timecode, on a region of a paused frame,
+or about the whole cut; the agent pulls those notes as a digest (SPEC §9.4),
+acts, and resolves them.
+
+Exposure is a Cloudflare Tunnel whose ingress forwards **only** `/r/*` and
+`/api/r/*` (plus Next's static build assets); every other path 404s at the edge,
+and the app's own middleware enforces the same boundary independently. The
+authoring UI, the API, and the login page never become public. Set
+`WAYPOINT_REVIEW_PUBLIC_URL` to the public hostname so minted links name it. The
+full runbook is [`docs/ops/review-tunnel.md`](docs/ops/review-tunnel.md).
+
+**Revoking.** Revoking a *review link* is immediate and total — the token is
+checked in SQLite on every request — and it costs nothing else: the render and
+every note made through the link survive. Revoking the *publication* deletes the
+R2 objects, but `dropzone.tylersavery.com` sits behind Cloudflare's edge cache
+with `cache-control: max-age=14400`, so the file URL can keep answering **200
+from the edge for up to four hours** after the object is gone. If the bytes have
+to be unreachable now, purge that URL from the Cloudflare cache as well — the
+exact call is in the ops doc. Revoke the link first; it is the switch that
+actually flips instantly.
 
 ## Onboarding an agent (the Waypoint skill)
 

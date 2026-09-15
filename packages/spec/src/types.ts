@@ -8,7 +8,7 @@
  */
 
 /** Semver of the review convention. `docs/SPEC.md` is the public contract (§4). */
-export const SPEC_VERSION = "1.1.0";
+export const SPEC_VERSION = "1.2.0";
 
 /** Frontmatter opt-in marker value (`waypoint: 1` in §5.1). */
 export const SPEC_MARKER = 1;

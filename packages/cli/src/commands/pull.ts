@@ -2,8 +2,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  ApiError,
   exportAnnotated,
   exportDigest,
+  exportPublicationDigest,
   getAttachmentBytes,
   getDocument,
   listDocuments,
@@ -69,7 +71,20 @@ export async function runPull(
     throw new CliError("Nothing to pull. Specify an id, use --latest, or push a document first.");
   }
 
-  const detail = await getDocument(config, id);
+  // An id that matches no document may be a publication: a render carries review
+  // notes but no pull lifecycle, so `--digest` falls through to the media digest
+  // (SPEC §9.4) and none of the pointer/`pulled` side effects below run.
+  let detail: DocumentDetail;
+  try {
+    detail = await getDocument(config, id);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      await pullPublicationDigest(id, options, deps);
+      return;
+    }
+    throw err;
+  }
+
   const annotated = await exportAnnotated(config, id);
   // Fetch the digest up front (before any writes/side effects) so a failure here
   // fails the whole pull cleanly rather than half-writing.
@@ -129,4 +144,29 @@ async function writeAttachments(
     writeFileSync(path.join(folderDir, att.exportName), bytes);
   }
   io.log(`Wrote ${all.length} attachment(s) to ${path.relative(process.cwd(), folderDir)}`);
+}
+
+/**
+ * `waypoint pull <publication-id> --digest` (decision C-6). A publication is a
+ * permanent artifact, not a review in flight: there is no annotated export, no
+ * pending pointer, and no `pulled` status to stamp. So this writes exactly one
+ * file — `<sanitized-name>.digest.md`, in the current directory — and stops.
+ */
+async function pullPublicationDigest(
+  publicationId: string,
+  options: PullOptions,
+  deps: CommandDeps,
+): Promise<void> {
+  const { config, io } = deps;
+  if (!options.digest) {
+    throw new CliError(
+      `No document ${publicationId.slice(0, 8)}. If that is a publication, pull its review notes with --digest.`,
+    );
+  }
+
+  const digest = await exportPublicationDigest(config, publicationId);
+  const filename = digest.filename || `${publicationId}.digest.md`;
+  const target = path.resolve(process.cwd(), filename);
+  writeFileSync(target, digest.body, "utf8");
+  io.log(`Wrote ${path.relative(process.cwd(), target)}`);
 }

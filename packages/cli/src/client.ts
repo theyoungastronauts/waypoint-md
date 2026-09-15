@@ -394,3 +394,125 @@ function filenameFromDisposition(header: string | null): string {
   const match = /filename="?([^"]+)"?/i.exec(header);
   return match ? match[1] : "";
 }
+
+/**
+ * The review half of the publications API (§ media spec Phase C). Same thin
+ * wrappers as everything else here: one function per endpoint, `ApiError` for a
+ * non-2xx, `NetworkError` for an unreachable server, and no state of its own.
+ */
+
+/** A publication as the registry lists it — the fields `status` prints. */
+export interface PublicationSummary {
+  id: string;
+  kind: string;
+  title: string;
+  createdAt: string;
+  revoked: boolean;
+  group?: string | null;
+  label?: string | null;
+  contentType?: string | null;
+  bytes?: number | null;
+  /** Media only: notes still open on this render (Phase C). */
+  unresolved?: number;
+}
+
+/** A review link as the authoring API reports it, including the URL to hand out. */
+export interface ReviewLink {
+  id: string;
+  reviewerName: string;
+  token: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  revoked: boolean;
+  url: string;
+}
+
+/** One note on a render, numbered as the digest numbers it. */
+export interface MediaComment {
+  id: string;
+  ordinal: number;
+  authorName: string;
+  timecodeMs: number | null;
+  body: string;
+  createdAt: string;
+  resolved: boolean;
+}
+
+export async function listPublications(config: ResolvedConfig): Promise<PublicationSummary[]> {
+  const res = await doFetch(`${config.url}/api/publications`, { headers: headers(config) });
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as { publications: PublicationSummary[] }).publications;
+}
+
+/** The media digest (SPEC §9.4) — what `pull <publication-id> --digest` writes. */
+export async function exportPublicationDigest(
+  config: ResolvedConfig,
+  id: string,
+): Promise<ExportFile> {
+  const res = await doFetch(
+    `${config.url}/api/publications/${encodeURIComponent(id)}/export?format=digest`,
+    { headers: headers(config) },
+  );
+  if (!res.ok) throw await toApiError(res);
+  const body = await res.text();
+  return { filename: filenameFromDisposition(res.headers.get("content-disposition")), body };
+}
+
+export async function listReviewLinks(config: ResolvedConfig, id: string): Promise<ReviewLink[]> {
+  const res = await doFetch(`${config.url}/api/publications/${encodeURIComponent(id)}/review-links`, {
+    headers: headers(config),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as { links: ReviewLink[] }).links;
+}
+
+export async function createReviewLink(
+  config: ResolvedConfig,
+  id: string,
+  name: string,
+): Promise<ReviewLink> {
+  const res = await doFetch(`${config.url}/api/publications/${encodeURIComponent(id)}/review-links`, {
+    method: "POST",
+    headers: headers(config, { "content-type": "application/json" }),
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as { link: ReviewLink }).link;
+}
+
+export async function revokeReviewLink(
+  config: ResolvedConfig,
+  id: string,
+  linkId: string,
+): Promise<ReviewLink> {
+  const res = await doFetch(
+    `${config.url}/api/publications/${encodeURIComponent(id)}/review-links/${encodeURIComponent(linkId)}/revoke`,
+    { method: "POST", headers: headers(config) },
+  );
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as { link: ReviewLink }).link;
+}
+
+export async function listMediaComments(
+  config: ResolvedConfig,
+  id: string,
+): Promise<MediaComment[]> {
+  const res = await doFetch(`${config.url}/api/publications/${encodeURIComponent(id)}/comments`, {
+    headers: headers(config),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as { comments: MediaComment[] }).comments;
+}
+
+export async function resolveMediaComment(
+  config: ResolvedConfig,
+  id: string,
+  commentId: string,
+): Promise<MediaComment> {
+  const res = await doFetch(
+    `${config.url}/api/publications/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}/resolve`,
+    { method: "POST", headers: headers(config) },
+  );
+  if (!res.ok) throw await toApiError(res);
+  return ((await res.json()) as { comment: MediaComment }).comment;
+}

@@ -7,7 +7,7 @@ import type { IO } from "./io";
  * major versions and warns on a mismatch (§12) — a different major means the
  * server may emit a convention this CLI doesn't understand.
  */
-export const EXPECTED_SPEC_VERSION = "1.1.0";
+export const EXPECTED_SPEC_VERSION = "1.2.0";
 
 function major(version: string): string {
   return version.split(".")[0] ?? version;

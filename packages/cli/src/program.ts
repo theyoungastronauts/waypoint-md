@@ -7,6 +7,8 @@ import { runInit } from "./commands/init";
 import { runPush } from "./commands/push";
 import { runPublish, runBackfill } from "./commands/publish";
 import { runStatus } from "./commands/status";
+import { runLinks } from "./commands/links";
+import { runResolve } from "./commands/resolve";
 import { runPull } from "./commands/pull";
 import { runOpen } from "./commands/open";
 import { runConfigGet, runConfigSet } from "./commands/config";
@@ -128,20 +130,44 @@ export function createProgram(version: string, io: IO = consoleIo): Command {
     .description("List this project's documents and their review states")
     .option("-u, --url <url>", "server URL")
     .option("-p, --project <project>", "project name")
-    .action(async (opts: CommonOpts) => {
-      await runStatus(deps(opts, io));
+    .option("--publications", "list publications and their open review notes instead")
+    .action(async (opts: CommonOpts & { publications?: boolean }) => {
+      await runStatus(deps(opts, io), { publications: opts.publications });
     });
 
   program
     .command("pull")
     .description("Fetch an annotated review beside its source and mark it pulled")
-    .argument("[id]", "document id to pull")
+    .argument("[id]", "document id, or a publication id with --digest")
     .option("-u, --url <url>", "server URL")
     .option("-p, --project <project>", "project name")
     .option("--latest", "pull the most recent document for this project")
     .option("--digest", "also write the compact digest (<name>.digest.md)")
     .action(async (id: string | undefined, opts: CommonOpts & { latest?: boolean; digest?: boolean }) => {
       await runPull(id, { latest: opts.latest, digest: opts.digest }, deps(opts, io));
+    });
+
+  program
+    .command("links")
+    .description("Create, list, or revoke per-reviewer links for a media publication")
+    .argument("<publication-id>", "publication id")
+    .option("-u, --url <url>", "server URL")
+    .option("--add <name>", "mint a link bound to this reviewer's name")
+    .option("--revoke <linkId>", "revoke this link id")
+    .action(
+      async (publicationId: string, opts: CommonOpts & { add?: string; revoke?: string }) => {
+        await runLinks(publicationId, { add: opts.add, revoke: opts.revoke }, deps(opts, io));
+      },
+    );
+
+  program
+    .command("resolve")
+    .description("Mark a review note on a media publication as acted on")
+    .argument("<publication-id>", "publication id")
+    .argument("<comment>", "the note's digest number (c1) or its id")
+    .option("-u, --url <url>", "server URL")
+    .action(async (publicationId: string, comment: string, opts: CommonOpts) => {
+      await runResolve(publicationId, comment, deps(opts, io));
     });
 
   program

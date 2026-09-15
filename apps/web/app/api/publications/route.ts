@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { HttpError, toErrorResponse } from "@/lib/api/http";
 import { listPublications, toPublicationSummary } from "@/lib/publications";
+import { countUnresolvedByPublication } from "@/lib/review/comments";
 import { publicationUrls } from "@/lib/publish/paths";
 import { assertPublishEnabled } from "@/lib/publish/guard";
 import { publish } from "@/lib/publish/service";
@@ -68,7 +69,21 @@ export async function GET(req: Request): Promise<NextResponse> {
     // a full page means there may be more, so hand back the cursor to continue.
     const pageSize = limit ?? rows.length;
     const nextOffset = pageSize > 0 && rows.length === pageSize ? offset + rows.length : null;
-    return NextResponse.json({ publications: rows.map(toPublicationSummary), nextOffset });
+
+    // Open review notes per render (Phase C), so `waypoint status --publications`
+    // and the registry list can show what still needs acting on. One query for
+    // the whole page; a markdown publication has no notes and carries no field.
+    const summaries = rows.map(toPublicationSummary);
+    const counts = countUnresolvedByPublication(
+      summaries.filter((s) => s.kind === "media").map((s) => s.id),
+    );
+    const publications = summaries.map((summary) =>
+      summary.kind === "media"
+        ? { ...summary, unresolved: counts.get(summary.id) ?? 0 }
+        : summary,
+    );
+
+    return NextResponse.json({ publications, nextOffset });
   } catch (err) {
     return toErrorResponse(err);
   }

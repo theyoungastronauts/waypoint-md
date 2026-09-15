@@ -162,3 +162,63 @@ How to read the digest:
   `**Suggestion:**` line, when present, is replacement text to apply verbatim.
 - `## Structured responses` (not shown here) appears for adoptive-import answers on
   docs that had no `wp:` questions — same answer lines, each with a source anchor.
+
+## 4. A media digest — the same loop, for a render
+
+A published render takes review notes instead of answers, and `waypoint pull
+<publication-id> --digest` writes them as a **media digest**. Its grammar is
+`docs/SPEC.md` §9.4 — the same field-label contract as §9, with `kind: media` in
+the frontmatter and two labels the document digest does not use.
+
+```markdown
+---
+waypoint_digest: 1
+kind: media
+title: "vBTC Unwrapped"
+group: "vbtc-unwrapped"
+label: "v2"
+source: "https://dropzone.example.com/smitty/shares/8f3c…/vbtc-unwrapped-v2.mp4"
+status: "published"
+reviewed_at: "2026-09-15T12:00:00.000Z"
+comments: 3
+unresolved: 3
+---
+
+# Digest — vBTC Unwrapped
+
+## Comments
+
+### c1
+**Anchor:** "general"
+**By:** Jay
+**Comment:** overall pace is right, it's the last third that drags
+
+### c2
+**Anchor:** "00:12.4"
+**By:** Jay
+**Comment:** the wordmark lands too late here — bring it in on the beat
+
+### c3
+**Anchor:** "00:31.0"
+**Region:** 0.120,0.340,0.250,0.180
+**By:** Aaron
+**Comment:** this corner is muddy at 1080p
+```
+
+How to read it:
+- `kind: media` is the field to branch on. There are no question counters,
+  because a render has no questions — only `comments` (entries rendered) and
+  `unresolved` (notes still open on the publication).
+- `**Anchor:**` is `"mm:ss.d"` into the cut, or the literal `"general"` for a
+  note about the whole thing. Minutes are not wrapped into hours: 70 minutes in
+  reads `"70:04.2"`.
+- `**Region:**` appears only when the note marks a box on the frame: `x,y,w,h` as
+  fractions of the media box from its top-left, to three decimals. `c3` above
+  marks the left-of-centre area, a quarter of the width and under a fifth of the
+  height.
+- `**By:**` is the reviewer, taken from the link the note arrived on.
+- Resolved notes are omitted, so a digest of open notes can skip numbers
+  (`c2` with no `c1`). Numbers are positional, not identifiers.
+
+Act on it: make each change, then `waypoint resolve <publication-id> c2` for the
+notes you actually addressed. Leave open anything you did not do, and say why.

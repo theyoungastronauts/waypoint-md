@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * The full §6 data model. Landed in one shot in Phase 1 (it is small and
@@ -191,3 +191,72 @@ export const publications = sqliteTable("publications", {
   /** Set when the R2 objects are deleted; the registry row itself survives. */
   revokedAt: text("revoked_at"),
 });
+
+/**
+ * A per-reviewer capability for the public review surface (§ media spec Phase C,
+ * decision C-1). A link is minted against one publication and carries the
+ * reviewer's name, so a comment's author is never taken from a request body — it
+ * is read off the link the request arrived on.
+ *
+ * The link is valid for **every finalized media publication sharing that
+ * publication's `group_slug`**, so a reviewer handed a v1 link keeps working when
+ * v2 is published. Revoking stamps `revoked_at`: the link dies while the
+ * publication and every comment made through it survive.
+ */
+export const reviewLinks = sqliteTable(
+  "review_links",
+  {
+    id: id(),
+    publicationId: text("publication_id")
+      .notNull()
+      .references(() => publications.id),
+    /** Displayed on the public page; the author of every comment made through it. */
+    reviewerName: text("reviewer_name").notNull(),
+    /** 32 random bytes, hex — the `?k=` capability. Compared in constant time. */
+    token: text("token").notNull(),
+    createdAt: createdAt(),
+    revokedAt: text("revoked_at"),
+    /** Last time the link was used, so a stale link is recognizable. */
+    lastSeenAt: text("last_seen_at"),
+  },
+  (table) => [
+    uniqueIndex("review_links_token_idx").on(table.token),
+    index("review_links_publication_idx").on(table.publicationId),
+  ],
+);
+
+/**
+ * A note on a media publication (decision C-2). Separate from `comments`, whose
+ * anchor is a text quote: this anchor is a timecode (null = a general note) and,
+ * optionally, a region drawn on the frame — `{ x, y, w, h }` in 0–1 fractions of
+ * the media box, so it survives any player size.
+ *
+ * `review_link_id` is null for an author-side comment (made on the tailnet), set
+ * for one that arrived through a public review link. `body` is plain text and is
+ * escaped on output — the public page never renders markdown.
+ */
+export const mediaComments = sqliteTable(
+  "media_comments",
+  {
+    id: id(),
+    publicationId: text("publication_id")
+      .notNull()
+      .references(() => publications.id),
+    /** The link the comment arrived on; null for an author-side note. */
+    reviewLinkId: text("review_link_id").references(() => reviewLinks.id),
+    /** Copied from the link at write time, so a revoked link keeps its attribution. */
+    authorName: text("author_name").notNull(),
+    /** Milliseconds into the media; null is a general (untimed) note. */
+    timecodeMs: integer("timecode_ms"),
+    /** JSON `{ x, y, w, h }` in 0–1 fractions, or null for no region mark. */
+    region: text("region", { mode: "json" }),
+    bodyText: text("body").notNull(),
+    createdAt: createdAt(),
+    /** Author-side only: set when the note has been acted on. */
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [
+    index("media_comments_publication_idx").on(table.publicationId),
+    index("media_comments_unresolved_idx").on(table.publicationId, table.resolvedAt),
+  ],
+);

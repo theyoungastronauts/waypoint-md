@@ -18,8 +18,20 @@ export const SESSION_COOKIE = "wp_session";
  */
 const OPEN_PATHS = new Set<string>(["/api/health", "/api/auth/login", "/login"]);
 
+/**
+ * The public review surface (§ media spec Phase C, decision C-3): the only
+ * prefixes in the app that open without credentials, and the only two paths the
+ * Cloudflare Tunnel's ingress forwards. Every capability check inside them is
+ * the `?k=` review link itself, which is per-reviewer and revocable.
+ *
+ * The trailing slash is load-bearing: `/r/` opens `/r/<id>` and nothing else —
+ * not `/r` itself, and not a future `/rollback`.
+ */
+const OPEN_PREFIXES = ["/r/", "/api/r/"] as const;
+
 export function isOpenPath(pathname: string): boolean {
-  return OPEN_PATHS.has(pathname);
+  if (OPEN_PATHS.has(pathname)) return true;
+  return OPEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
 /** The configured token, or null when auth is disabled (open mode). */

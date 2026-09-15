@@ -58,6 +58,42 @@ Do not push trivial output. Push the things a human genuinely needs to weigh in
 on: irreversible choices, ambiguous requirements, architectural forks, anything
 where guessing wrong is expensive.
 
+## Media publications and reviews
+
+Waypoint also publishes **media** — a render, a still, a PDF — and takes
+timecoded review notes on it. Use this when a human needs to watch something and
+say what to change, rather than read something and answer questions.
+
+1. **Publish the render.** `waypoint publish out/spot.mp4 --group <material> --label v2 --json`
+   uploads the file straight to storage and prints `{ id, title, kind, urls }` on
+   stdout and nothing else. A `<file>.manifest.json` beside the render is picked
+   up automatically. `--group` is what makes v1 and v2 the same material.
+2. **Mint one link per reviewer.** `waypoint links <publication-id> --add "Jay"`
+   prints the URL to send. The name is bound to the link, so every note that
+   arrives through it is attributed to that person — never ask the reviewer to
+   type their name, and never pass one yourself. `waypoint links <publication-id>`
+   lists them; `--revoke <link-id>` kills one, instantly and without touching the
+   render or the notes already left.
+3. **Poll for notes.** `waypoint status --publications` lists every publication
+   with its group, label, and how many notes are still unresolved. There is no
+   push notification — check it at the start of a session, as with the pull loop.
+4. **Pull the notes.** `waypoint pull <publication-id> --digest` writes
+   `<name>.digest.md` in the current directory. It is a **media digest**
+   (`kind: media`, SPEC §9.4): one entry per open note, each with an
+   `**Anchor:**` of `"mm:ss.d"` (or `"general"`), an optional `**Region:**`
+   marking a box on the frame as four fractions `x,y,w,h`, a `**By:**` author,
+   and the `**Comment:**` itself. No pointer is written and nothing is marked
+   pulled — a publication has no review lifecycle.
+5. **Act, then resolve each note.** `waypoint resolve <publication-id> c3` marks
+   the note the digest called `c3` as acted on, which is what removes it from the
+   unresolved count. Resolve one note per change you actually made; leave the
+   rest open. Numbers are positional, so resolve against a digest you just
+   pulled, not a stale one.
+
+A render usually goes through more than one pass. Publishing v2 with the same
+`--group` keeps every existing review link working — the reviewer's link opens
+the new version, with its own notes.
+
 ## Authoring rules (summary)
 
 Full guidance with examples is in [references/authoring.md](references/authoring.md).
@@ -79,7 +115,7 @@ The essentials:
 - [references/authoring.md](references/authoring.md) — how to write SPEC v1 docs:
   text vs choice, ID discipline, self-contained prompts, pre-filling drafts.
 - [references/examples.md](references/examples.md) — a complete review doc, the
-  annotated result, and the digest an agent acts on.
+  annotated result, the digest an agent acts on, and a worked media digest.
 
 ## Setup (first time in a repo)
 

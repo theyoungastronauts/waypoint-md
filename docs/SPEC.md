@@ -1,6 +1,6 @@
-# Waypoint Review Convention — SPEC v1.1.0
+# Waypoint Review Convention — SPEC v1.2.0
 
-**Status:** Stable · **Spec version:** `1.1.0` · **Frontmatter marker:** `waypoint: 1`
+**Status:** Stable · **Spec version:** `1.2.0` · **Frontmatter marker:** `waypoint: 1`
 
 This is the public contract for the Waypoint review convention: a tiny set of
 HTML-comment markers that turn ordinary markdown into an interactive review
@@ -22,6 +22,14 @@ into (`waypoint: 1` for the `1.x` line). Within a major version:
 
 **Changelog**
 
+- **1.2.0** — adds the **media digest** (§9.4): a second digest flavour for a
+  published render, with `kind: media` frontmatter and two new entry labels,
+  `**By:**` (the note's author) and `**Region:**` (a box on the frame). Additive
+  and backward-compatible: the document digest (§9.1–§9.3) is byte-for-byte what
+  it was under 1.1.0, and unknown `**Label:**` tokens were already field
+  boundaries (§9.3), so a 1.1.0 reader skips the new fields rather than
+  misparsing them. No change to the review convention itself — `parseDocument`
+  and `applyReview` are untouched, and the opt-in marker stays `waypoint: 1`.
 - **1.1.0** — adds the optional `wp:rationale` block on a choice question (§3).
   Additive and backward-compatible: a `waypoint: 1` document without a rationale
   block parses byte-for-byte as it did under 1.0.0. The opt-in marker stays
@@ -414,6 +422,107 @@ its own line, so this boundary rule is unambiguous in practice.)
 The digest is **not** round-tripped: there is no parser that reconstructs review
 state from it. It is a read-only projection. The annotated export remains the
 canonical, byte-faithful artifact (§7).
+
+### 9.4 Media digests — since 1.2.0
+
+A **media digest** is the same contract for a published *render* rather than a
+review document: `GET /api/publications/:id/export?format=digest`, which
+`waypoint pull <publication-id> --digest` writes as `<name>.digest.md`. A render
+has no questions and no quoted anchors — it has notes left at moments in the cut
+— so the frontmatter and the entry grammar differ from §9.1–§9.3 in the ways
+below and in no other way.
+
+It is distinguished by `kind: media` in the frontmatter, which is the field a
+reader should branch on.
+
+```markdown
+---
+waypoint_digest: 1
+kind: media
+title: "vBTC Unwrapped"
+group: "vbtc-unwrapped"
+label: "v2"
+source: "https://dropzone.example.com/smitty/shares/<uuid>/vbtc-unwrapped-v2.mp4"
+status: "published"
+reviewed_at: "2026-09-15T12:00:00.000Z"
+comments: 3
+unresolved: 3
+---
+
+# Digest — vBTC Unwrapped
+
+## Comments
+
+### c1
+**Anchor:** "general"
+**By:** Jay
+**Comment:** overall pace is right
+
+### c2
+**Anchor:** "00:12.4"
+**By:** Jay
+**Comment:** the wordmark lands too late here
+
+### c3
+**Anchor:** "00:31.0"
+**Region:** 0.120,0.340,0.250,0.180
+**By:** Aaron
+**Comment:** this corner is muddy
+```
+
+**Frontmatter keys.** Fixed order, as shown. `waypoint_digest: 1` still comes
+first and `kind: media` immediately follows it.
+
+| Key | Meaning |
+|---|---|
+| `waypoint_digest` | Digest format major version (`1`) — shared with §9.2. |
+| `kind` | `media`. Absent on a document digest, which is implicitly `kind: document`. |
+| `title` | The publication's title. |
+| `group` / `label` | The material slug a version stack shares, and the version within it. Present only when set. |
+| `source` | The public URL of the published file itself. |
+| `status` | `published`, or `revoked` once the file has been deleted from storage. |
+| `reviewed_at` | ISO-8601 timestamp the digest was generated. |
+| `comments` | Number of `## Comments` entries **rendered**. |
+| `unresolved` | Number of notes on the publication that are still open. |
+
+The question counters of §9.2 (`answered`, `flagged`, `skipped`, `untouched`,
+`total`, `synthetic`) do not appear: a render has no questions. `## Questions`
+and `## Structured responses` never appear either, so `## Comments` is the only
+section — and, per §9.1, it is omitted entirely when nothing is rendered.
+
+**Entry grammar.** One `###` entry per note, in **timecode order with general
+notes first**, ties broken by creation time. The heading is `### c<n>`, where `n`
+is assigned from 1 over **every** note on the publication. Fields, in this order:
+
+- `**Anchor:**` — a quoted `"mm:ss.d"` position, or the quoted literal
+  `"general"` for a note about the whole render. `mm` is not wrapped into hours:
+  a note 70 minutes in reads `"70:04.2"`. Single-line, as in §9.3.
+- `**Region:**` — present only when the note marks a box on the frame: four
+  fractions of the media box, `x,y,w,h`, each to three decimals, comma-separated
+  with no spaces. The origin is the top-left of the frame, so `0.000,0.000,1.000,1.000`
+  is the whole of it. Single-line.
+- `**By:**` — the note's author, from the review link it was left through.
+  Single-line.
+- `**Comment:**` — the note itself, plain text. May span multiple lines and ends
+  at the next field boundary (§9.3).
+
+**Resolved notes are omitted by default.** A note the author has marked resolved
+is not rendered unless the export is asked for it (`?resolved=1`), because the
+open ones are what an agent has to act on. Filtering happens **after** numbering,
+so a digest of open notes can skip numbers (`c2` with no `c1`) — a note keeps its
+number while the notes before it in the cut are being resolved. Numbers are
+positional, not identifiers: a note added earlier in the cut shifts the ones after
+it, so resolve against a digest freshly pulled rather than a stale one.
+
+**Escaping.** A note body is written by a reviewer and §9.3 makes any line
+beginning with a `**Label:**` token a field boundary. A body line that would
+otherwise begin with one is emitted with a leading backslash (`\**By:** …`),
+which renders as the literal text and cannot end the `**Comment:**` value. A
+reader may therefore trust that every field line in an entry was written by the
+renderer.
+
+Media digests, like document digests, are a read-only projection: there is no
+parser that reconstructs review state from one.
 
 ---
 

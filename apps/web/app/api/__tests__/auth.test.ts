@@ -137,3 +137,41 @@ describe("POST /api/auth/login (cookie exchange)", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 });
+
+/**
+ * The public review surface (§ media spec Phase C, decision C-3). This is the
+ * only exception to "every route is protected by default", so the boundary gets
+ * asserted from both sides: exactly `/r/*` and `/api/r/*` open, and every
+ * neighbouring path — including the ones whose names nearly match — stays shut.
+ * The Cloudflare Tunnel's ingress forwards the same two prefixes and nothing
+ * else, so this list and that config are the same claim made twice.
+ */
+describe("auth middleware — the public review surface", () => {
+  it("lets a review page and its API through with no credentials", () => {
+    setToken(TOKEN);
+    expect(allowed(middleware(req("/r/abc123")))).toBe(true);
+    expect(allowed(middleware(req("/r/abc123?k=deadbeef")))).toBe(true);
+    expect(allowed(middleware(req("/api/r/abc123")))).toBe(true);
+    expect(allowed(middleware(req("/api/r/abc123/comments")))).toBe(true);
+  });
+
+  it("keeps everything else behind the token", () => {
+    setToken(TOKEN);
+    expect(middleware(req("/api/publications")).status).toBe(401);
+    expect(middleware(req("/api/publications/abc123/review-links")).status).toBe(401);
+    expect(middleware(req("/api/publications/abc123/comments")).status).toBe(401);
+    expect(middleware(req("/api/publications/abc123/export")).status).toBe(401);
+    expect(middleware(req("/api/documents")).status).toBe(401);
+    expect(isRedirectToLogin(middleware(req("/d/abc123")))).toBe(true);
+    expect(isRedirectToLogin(middleware(req("/publications")))).toBe(true);
+    expect(isRedirectToLogin(middleware(req("/publications/abc123")))).toBe(true);
+  });
+
+  it("opens the prefix, not the bare segment or anything that merely starts with it", () => {
+    setToken(TOKEN);
+    expect(isRedirectToLogin(middleware(req("/r")))).toBe(true);
+    expect(isRedirectToLogin(middleware(req("/rollback")))).toBe(true);
+    expect(middleware(req("/api/reviews")).status).toBe(401);
+    expect(middleware(req("/api/r")).status).toBe(401);
+  });
+});
