@@ -5,7 +5,8 @@
 Two phases, all decisions baked. Executed one phase at a time: execute → standing gates → commit → next phase. The reviewer (a separate session) verifies each phase against the exit criteria before anything is deployed. Standing gates after every phase, run in the worktree with the local Node 20 shell:
 
 ```bash
-COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0 PATH="$HOME/.corepack-bin:$PATH"   # corepack shims: root scripts call a nested `pnpm -r`
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
 The `@waypoint/spec` byte-fidelity invariant (`applyReview(raw, {}) === raw`; round-trip recovers state) is the #1 non-negotiable and stays green. Neither phase touches `applyReview`/`parseDocument`; the SPEC bump is additive (a new digest section and two new labels).
@@ -13,8 +14,8 @@ The `@waypoint/spec` byte-fidelity invariant (`applyReview(raw, {}) === raw`; ro
 ## Ground rules for the executor
 
 - **Work only in the worktree** `~/prj/waypoint-wt-media-review` (branch `feat/media-review`, already created and installed). The main checkout at `~/prj/waypoint` serves production from `apps/web/.next/standalone` through launchd; never run `pnpm build`, `next dev`, or migrations there, and never touch `~/.waypoint/` (production data and secrets).
-- `pnpm` is not on PATH; every command is `corepack pnpm …` with `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` exported.
-- A dev server for manual checks runs against a throwaway data dir: `WAYPOINT_DATA_DIR=$(mktemp -d) PORT=3130 corepack pnpm --filter @waypoint/web dev`. Port 3130 only; never 3000. R2 is not configured in that environment, so publish routes report `publish_unavailable` there; everything R2-facing is proven by mocked route tests (the house pattern in `apps/web/app/api/__tests__/publications.test.ts`).
+- `pnpm` is not installed globally. `~/.corepack-bin` holds corepack's shims; export `PATH="$HOME/.corepack-bin:$PATH"` and `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` in every shell, then plain `pnpm` works (including the nested `pnpm -r` the root scripts run).
+- A dev server for manual checks runs against a throwaway data dir: `WAYPOINT_DATA_DIR=$(mktemp -d) PORT=3130 pnpm --filter @waypoint/web dev`. Port 3130 only; never 3000. R2 is not configured in that environment, so publish routes report `publish_unavailable` there; everything R2-facing is proven by mocked route tests (the house pattern in `apps/web/app/api/__tests__/publications.test.ts`).
 - Follow the conventions already in `apps/web` (zod-validated route handlers under `app/api/*`, Drizzle + better-sqlite3, server components for reads, shadcn/ui, dark theme default) and in `packages/cli` (commander, zero heavy deps, `client.ts` fetch wrappers, `io` for output, `CliError` for user errors). Read `.claude/CLAUDE.md`, `docs/SPEC.md` §9, `docs/plans/publish-spec.md`, and the current `lib/publish/*`, `lib/publications.ts`, `lib/digest.ts`, `middleware.ts`, `lib/auth.ts` before writing code.
 - Tests beside the code as you go (vitest), not after. Every new route, every new CLI command path, the digest renderer and the middleware change get tests. Mock S3 and the presigner; never call R2 from tests.
 - Commit at the end of each phase with a conventional-commit message (`feat(publish): …`, `feat(review): …`). Do not push. Do not merge. Leave the worktree on the branch.
@@ -72,7 +73,7 @@ The `@waypoint/spec` byte-fidelity invariant (`applyReview(raw, {}) === raw`; ro
 
 - Standing gates green.
 - Route tests prove the presigned flow end to end with mocks, including the 409 and GC paths.
-- `corepack pnpm --filter waypoint-md build` produces a CLI whose `waypoint publish --help` shows the new flags; `waypoint publish some.mp4 --json` against a dev server without R2 prints the `publish_unavailable` error cleanly (no stack).
+- `pnpm --filter waypoint-md build` produces a CLI whose `waypoint publish --help` shows the new flags; `waypoint publish some.mp4 --json` against a dev server without R2 prints the `publish_unavailable` error cleanly (no stack).
 - A markdown publish still works exactly as before (existing publication tests unchanged and green).
 
 ### Verification notes (reviewer)
@@ -122,6 +123,6 @@ The `@waypoint/spec` byte-fidelity invariant (`applyReview(raw, {}) === raw`; ro
 ## After both phases (reviewer, not the executor)
 
 1. Review the diff on `feat/media-review`, run the gates in the worktree, exercise the real-R2 checks.
-2. Merge to `main`, `corepack pnpm build` in `~/prj/waypoint`, `launchctl kickstart -k gui/$(id -u)/com.tyler.waypoint`, confirm `/api/health` and that migrations 0003 and 0004 applied to the production database (back it up first: `~/.waypoint/data`).
+2. Merge to `main`, `pnpm build` in `~/prj/waypoint`, `launchctl kickstart -k gui/$(id -u)/com.tyler.waypoint`, confirm `/api/health` and that migrations 0003 and 0004 applied to the production database (back it up first: `~/.waypoint/data`).
 3. Apply `docs/ops/review-tunnel.md`; confirm `https://review.tylersavery.com/api/health` is 404 at the edge and `https://review.tylersavery.com/r/<id>?k=…` renders from a phone off the tailnet.
 4. In the video studio: `scripts/publish.mjs` wraps `waypoint publish --json` and writes the share URL into the render manifest.
