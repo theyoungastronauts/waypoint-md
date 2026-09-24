@@ -47,6 +47,27 @@ describe("auth middleware — enforced mode (token set)", () => {
     expect(allowed(middleware(req("/login")))).toBe(true);
   });
 
+  it("sends an already-authenticated /login visit on to its return path", () => {
+    setToken(TOKEN);
+    const res = middleware(req("/login?next=%2Fd%2Fabc123%3Ftab%3D2", { cookie: TOKEN }));
+    expect(res.status === 307 || res.status === 308).toBe(true);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/d/abc123");
+    expect(location.search).toBe("?tab=2");
+  });
+
+  it("sends an authenticated /login visit with a cross-origin return path to /", () => {
+    setToken(TOKEN);
+    const res = middleware(req("/login?next=https://evil.example/x", { cookie: TOKEN }));
+    expect(res.status === 307 || res.status === 308).toBe(true);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/");
+  });
+
+  it("still shows the form to a /login visit with a wrong cookie", () => {
+    setToken(TOKEN);
+    expect(allowed(middleware(req("/login?next=/d/abc123", { cookie: "wrong" })))).toBe(true);
+  });
+
   it("rejects an API call with no credentials (401)", () => {
     setToken(TOKEN);
     expect(middleware(req("/api/documents")).status).toBe(401);

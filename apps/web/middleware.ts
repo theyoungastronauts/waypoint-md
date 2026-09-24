@@ -6,6 +6,7 @@ import {
   credentialAuthorizes,
   isOpenPath,
 } from "@/lib/auth";
+import { resolveNextPath } from "@/lib/next-path";
 
 /**
  * The central auth gate (§15). Every route is covered by default: the matcher
@@ -20,12 +21,29 @@ export function middleware(req: NextRequest): NextResponse {
   if (!authEnabled()) return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  if (isOpenPath(pathname)) return NextResponse.next();
 
   const presented =
     bearerToken(req.headers.get("authorization")) ??
     req.cookies.get(SESSION_COOKIE)?.value ??
     null;
+
+  // A browser that already holds a valid session and lands on /login skips the
+  // form and continues to its return path. This is the "Open in Safari" case:
+  // an in-app webview with no cookie was bounced to `/login?next=…`, and that
+  // exact URL is what the signed-in browser then opens.
+  if (pathname === "/login" && credentialAuthorizes(presented)) {
+    const next = new URL(
+      resolveNextPath(req.nextUrl.searchParams.get("next"), req.nextUrl.origin),
+      req.nextUrl.origin,
+    );
+    const target = req.nextUrl.clone();
+    target.pathname = next.pathname;
+    target.search = next.search;
+    target.hash = next.hash;
+    return NextResponse.redirect(target);
+  }
+
+  if (isOpenPath(pathname)) return NextResponse.next();
 
   if (credentialAuthorizes(presented)) return NextResponse.next();
 
