@@ -26,6 +26,7 @@ vi.mock("@anthropic-ai/sdk", () => {
 import { setupTestDb } from "@/test/db";
 import { POST as postSession } from "@/app/api/documents/[id]/voice/session/route";
 import { GET as getVoiceSession, PATCH as patchVoiceSession } from "@/app/api/voice-sessions/[id]/route";
+import { GET as listSessions } from "@/app/api/documents/[id]/voice/sessions/route";
 import { ingestDocument } from "@/lib/ingest/service";
 import { CLIENT_SECRETS_URL, REALTIME_MODEL } from "@/lib/voice/realtime";
 import { MAX_TRANSCRIPT_ENTRIES } from "@/lib/voice/transcript";
@@ -219,5 +220,29 @@ describe("PATCH /api/voice-sessions/:id", () => {
     expect((await res.json()).session.entries).toBe(MAX_TRANSCRIPT_ENTRIES);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("GET /api/documents/:id/voice/sessions", () => {
+  it("lists a document's calls with transcripts, even with voice switched off", async () => {
+    const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    const sid = (await (await start(id)).json()).sessionId;
+    await patch(sid, { append: [{ role: "reviewer", at: "t", text: "hello" }], status: "ended" });
+
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const res = await listSessions(new Request(`http://localhost/api/documents/${id}/voice/sessions`), {
+      params: Promise.resolve({ id }),
+    });
+    expect(res.status).toBe(200);
+    const { sessions } = await res.json();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ id: sid, status: "ended", transcript: [{ role: "reviewer", text: "hello" }] });
+  });
+
+  it("404s an unknown document", async () => {
+    const res = await listSessions(new Request("http://localhost/api/documents/nope/voice/sessions"), {
+      params: Promise.resolve({ id: "nope" }),
+    });
+    expect(res.status).toBe(404);
   });
 });

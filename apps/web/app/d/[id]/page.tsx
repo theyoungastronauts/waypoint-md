@@ -13,6 +13,7 @@ import { getDocumentDetail } from "@/lib/documents";
 import { relativeTime, sourceLabel, statusMeta } from "@/lib/format";
 import { buildSyntheticInits, renderReviewDocument } from "@/lib/render/review";
 import { voiceEnabled } from "@/lib/voice/config";
+import { listVoiceSessions } from "@/lib/voice/sessions";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,7 @@ export default async function DocumentPage({ params }: DocPageProps) {
         syntheticInits={syntheticInits}
         aiEnabled={ai}
         voiceEnabled={voiceEnabled()}
+        voiceSessions={listVoiceSessions(doc.id)}
         initialChat={initialChat}
         comments={doc.comments.map((c) => ({
           id: c.id,

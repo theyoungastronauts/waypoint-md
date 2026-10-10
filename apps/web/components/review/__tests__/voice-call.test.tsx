@@ -4,6 +4,9 @@ import type { Item } from "@waypoint/spec";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
 import { ChoiceGroup } from "@/components/review/choice-group";
 import { FocusProvider } from "@/components/review/focus-context";
 import { ResponsesProvider } from "@/components/review/responses-store";
@@ -265,5 +268,7 @@ describe("VoiceCall", () => {
       const last = calls((u) => u === "/api/voice-sessions/vs-1").at(-1)!;
       expect(JSON.parse(last[1]!.body as string)).toEqual({ status: "ended" });
     });
+    // The page refreshes so the new transcript appears under "Voice calls".
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });

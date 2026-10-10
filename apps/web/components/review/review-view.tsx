@@ -12,7 +12,9 @@ import { ItemCard } from "./item-card";
 import { KeyboardNav } from "./keyboard-nav";
 import { MobileSheet } from "./mobile-sheet";
 import { ResponsesProvider } from "./responses-store";
+import type { VoiceSessionRow } from "@/lib/voice/sessions";
 import { VoiceCall } from "./voice-call";
+import { VoiceTranscripts } from "./voice-transcripts";
 import { ReviewRail } from "./review-rail";
 import { UnanchoredComments } from "./unanchored-comments";
 import type { ReviewItemInit, ReviewSegment } from "./types";
@@ -31,6 +33,7 @@ export function ReviewView({
   comments,
   aiEnabled,
   voiceEnabled = false,
+  voiceSessions = [],
   initialChat,
 }: {
   docId: string;
@@ -42,6 +45,8 @@ export function ReviewView({
   aiEnabled: boolean;
   /** Server-driven capability flag (Waypoint Voice): whether the Talk button renders. */
   voiceEnabled?: boolean;
+  /** Past voice calls on this document, newest first, with transcripts. */
+  voiceSessions?: VoiceSessionRow[];
   /** The persisted chat thread for this document (empty when AI is off). */
   initialChat: AgentMessage[];
 }) {
@@ -123,6 +128,8 @@ export function ReviewView({
               <SyntheticSection inits={syntheticInits} startIndex={inits.length} />
 
               <UnanchoredComments />
+
+              <VoiceTranscripts sessions={voiceSessions} />
             </article>
 
             {/* flex-col + overflow-hidden give the rail a real height bound, so the

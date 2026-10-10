@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { VoiceBrief } from "@/lib/voice/brief";
@@ -73,6 +74,7 @@ function MicIcon({ className }: { className?: string }) {
 export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: () => void }) {
   const responses = useResponses();
   const { focus } = useFocus();
+  const router = useRouter();
 
   const [supported, setSupported] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -188,7 +190,8 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
         },
         onEnded: (reason, detail) => {
           const submitted = interview.isSubmitted;
-          void sync.close(submitted ? "submitted" : "ended");
+          // Once the transcript has landed, refresh so the "Voice calls" panel shows it.
+          void sync.close(submitted ? "submitted" : "ended").then(() => router.refresh());
           setPhase(reason === "error" ? "error" : "ended");
           setMessage(reason === "error" ? (detail ?? END_MESSAGE.error) : END_MESSAGE[submitted ? "submitted" : reason]);
           setCaption("");
@@ -198,7 +201,7 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
     );
     callRef.current = call;
     await call.start({ clientSecret: session.clientSecret, callsUrl: session.callsUrl });
-  }, [docId, focus, responses]);
+  }, [docId, focus, responses, router]);
 
   if (!supported) return null;
 
