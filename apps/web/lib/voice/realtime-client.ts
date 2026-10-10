@@ -29,6 +29,11 @@ export interface ToolCallRecord {
 export interface RealtimeCallHandlers {
   /** Run one tool call; the returned object is sent back as the call's output. */
   onToolCall(name: string, args: string): Promise<Record<string, unknown>>;
+  /**
+   * The reviewer started a new turn of speech (voice activity detected, or a
+   * transcript arrived). Gates the submit on a confirmation after the read-back.
+   */
+  onReviewerTurn?(): void;
   /** A finished utterance: what the reviewer said, or what the voice said. */
   onUtterance?(role: "reviewer" | "voice", text: string): void;
   /** Live caption of the voice model's current sentence (cleared with ""). */
@@ -54,6 +59,8 @@ export interface RealtimeDeps {
 export const GOODBYE_FALLBACK_MS = 8_000;
 /** A short tail after playback stops, so the last syllable isn't clipped. */
 const GOODBYE_TAIL_MS = 400;
+/** WebRTC "disconnected" often recovers by itself; only give up after this long. */
+export const DISCONNECT_GRACE_MS = 5_000;
 
 interface RealtimeEvent {
   type: string;
@@ -79,6 +86,7 @@ export class RealtimeCall {
   private pendingEnd: "submitted" | "stopped" | null = null;
   private goodbyeTimer: ReturnType<typeof setTimeout> | null = null;
   private goodbyeArmed = false;
+  private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /** Serializes tool handling so two `response.done`s never interleave writes. */
   private queue: Promise<void> = Promise.resolve();
 
@@ -109,8 +117,19 @@ export class RealtimeCall {
         this.deps.audioElement.srcObject = e.streams[0] ?? null;
       };
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        const state = pc.connectionState;
+        if (state === "failed" || state === "closed") {
           this.finish("dropped", "The connection to the voice service dropped.");
+        } else if (state === "disconnected") {
+          if (!this.disconnectTimer) {
+            this.disconnectTimer = this.deps.setTimeout(
+              () => this.finish("dropped", "The connection to the voice service dropped."),
+              DISCONNECT_GRACE_MS,
+            );
+          }
+        } else if (this.disconnectTimer) {
+          this.deps.clearTimeout(this.disconnectTimer);
+          this.disconnectTimer = null;
         }
       };
       for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
@@ -171,9 +190,15 @@ export class RealtimeCall {
     }
 
     switch (event.type) {
+      case "input_audio_buffer.speech_started":
+        this.enqueueReviewerTurn();
+        break;
       case "conversation.item.input_audio_transcription.completed": {
         const text = typeof event.transcript === "string" ? event.transcript.trim() : "";
-        if (text) this.handlers.onUtterance?.("reviewer", text);
+        if (text) {
+          this.enqueueReviewerTurn();
+          this.handlers.onUtterance?.("reviewer", text);
+        }
         break;
       }
       case "response.output_audio_transcript.delta": {
@@ -188,6 +213,9 @@ export class RealtimeCall {
         break;
       }
       case "response.done": {
+        // An interrupted (cancelled) response may carry half-formed calls and is
+        // never a goodbye: the reviewer is talking.
+        if ((event.response as { status?: unknown } | undefined)?.status === "cancelled") break;
         const calls = functionCalls(event);
         if (calls.length === 0) {
           // A spoken reply with no tool calls. If a goodbye was due, this is it.
@@ -216,6 +244,14 @@ export class RealtimeCall {
       default:
         break;
     }
+  }
+
+  /**
+   * Reviewer turns go through the tool queue so they stay ordered with tool
+   * calls: a turn that arrives after a read-back's result is counted after it.
+   */
+  private enqueueReviewerTurn(): void {
+    this.queue = this.queue.then(() => this.handlers.onReviewerTurn?.());
   }
 
   private caption = "";
@@ -278,6 +314,8 @@ export class RealtimeCall {
 
     if (this.goodbyeTimer) this.deps.clearTimeout(this.goodbyeTimer);
     this.goodbyeTimer = null;
+    if (this.disconnectTimer) this.deps.clearTimeout(this.disconnectTimer);
+    this.disconnectTimer = null;
     if (this.channel) {
       this.channel.onopen = null;
       this.channel.onmessage = null;
@@ -316,6 +354,8 @@ function isFunctionCall(item: unknown): item is FunctionCallItem {
   const it = item as Record<string, unknown>;
   return (
     it.type === "function_call" &&
+    // Only finished calls; an absent status is treated as finished.
+    (it.status === undefined || it.status === "completed") &&
     typeof it.name === "string" &&
     typeof it.call_id === "string" &&
     typeof it.arguments === "string"

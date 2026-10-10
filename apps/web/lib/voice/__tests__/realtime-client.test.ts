@@ -313,3 +313,77 @@ describe("RealtimeCall — ending", () => {
     vi.useRealTimers();
   });
 });
+
+describe("RealtimeCall — review fixes", () => {
+  async function live() {
+    const ctx = setup();
+    await ctx.call.start({ clientSecret: "ek", callsUrl: "u" });
+    ctx.peer.channel.open();
+    ctx.peer.channel.sent.length = 0;
+    return ctx;
+  }
+
+  it("rides out a brief 'disconnected' that recovers", async () => {
+    vi.useFakeTimers();
+    const { peer, handlers } = await live();
+    peer.connectionState = "disconnected";
+    peer.onconnectionstatechange?.();
+    await vi.advanceTimersByTimeAsync(2_000);
+    peer.connectionState = "connected";
+    peer.onconnectionstatechange?.();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(handlers.onEnded).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("ends as dropped when 'disconnected' outlasts the grace period", async () => {
+    vi.useFakeTimers();
+    const { peer, handlers } = await live();
+    peer.connectionState = "disconnected";
+    peer.onconnectionstatechange?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(handlers.onEnded).toHaveBeenCalledWith("dropped", expect.any(String));
+    vi.useRealTimers();
+  });
+
+  it("does not run calls from a cancelled response, or unfinished calls", async () => {
+    const { peer, handlers } = await live();
+    peer.channel.emit({
+      type: "response.done",
+      response: {
+        status: "cancelled",
+        output: [{ type: "function_call", name: "record_answer", call_id: "c1", arguments: "{}", status: "completed" }],
+      },
+    });
+    peer.channel.emit({
+      type: "response.done",
+      response: {
+        status: "completed",
+        output: [{ type: "function_call", name: "record_answer", call_id: "c2", arguments: '{"num', status: "in_progress" }],
+      },
+    });
+    await flush();
+    expect(handlers.onToolCall).not.toHaveBeenCalled();
+  });
+
+  it("a cancelled response does not count as the goodbye", async () => {
+    vi.useFakeTimers();
+    const { call, peer, handlers } = await live();
+    call.endAfterGoodbye("stopped");
+    peer.channel.emit({ type: "response.done", response: { status: "cancelled", output: [] } });
+    await vi.advanceTimersByTimeAsync(GOODBYE_FALLBACK_MS * 2);
+    expect(handlers.onEnded).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("reports reviewer turns from voice activity", async () => {
+    const onReviewerTurn = vi.fn();
+    const ctx = setup();
+    const call = new RealtimeCall(ctx.deps, { ...ctx.handlers, onReviewerTurn });
+    await call.start({ clientSecret: "ek", callsUrl: "u" });
+    ctx.peer.channel.open();
+    ctx.peer.channel.emit({ type: "input_audio_buffer.speech_started" });
+    await flush();
+    expect(onReviewerTurn).toHaveBeenCalledTimes(1);
+  });
+});

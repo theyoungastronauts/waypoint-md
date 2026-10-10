@@ -49,7 +49,14 @@ export class Interview {
   private readonly answeredBefore: Set<string>;
   /** Question numbers answered, flagged or skipped during this call. */
   private readonly covered = new Set<number>();
-  private readbackGiven = false;
+  /**
+   * The read-back gate. A read-back counts only once the reviewer has spoken
+   * after it (their confirmation), and any write afterwards voids it — the
+   * corrected answers must be read back again before submitting.
+   */
+  private readbackAtTurn: number | null = null;
+  private reviewerTurns = 0;
+  private submitting: Promise<void> | null = null;
   private submitted = false;
 
   constructor(brief: VoiceBrief, store: InterviewStore, answeredBefore: Iterable<string> = []) {
@@ -60,6 +67,16 @@ export class Interview {
 
   get isSubmitted(): boolean {
     return this.submitted;
+  }
+
+  /** Resolves once a submit already under way has settled (immediately if none). */
+  async settled(): Promise<void> {
+    await this.submitting?.catch(() => {});
+  }
+
+  /** The reviewer started speaking (a new turn). Called by the call, not the model. */
+  noteReviewerTurn(): void {
+    this.reviewerTurns += 1;
   }
 
   /** Run one tool call. `rawArgs` is the model's JSON argument string. */
@@ -158,7 +175,7 @@ export class Interview {
       if (!hasContent(draft)) {
         return { error: "There is no answer on this question to keep. Ask the reviewer for their answer." };
       }
-      this.store.writeDraft(q.itemId, { ...draft, status: "answered" });
+      this.write(q.itemId, { ...draft, status: "answered" });
       this.covered.add(q.number);
       return { ok: true, number: q.number, recorded: this.describe(q, { ...draft, status: "answered" }) };
     }
@@ -199,14 +216,14 @@ export class Interview {
       next = { ...draft, selected, other: note, status: "answered" };
     }
 
-    this.store.writeDraft(q.itemId, next);
+    this.write(q.itemId, next);
     this.covered.add(q.number);
     return { ok: true, number: q.number, recorded: this.describe(q, next) };
   }
 
   private setStatus(q: VoiceBriefQuestion, status: "flagged" | "skipped"): ToolResult {
     const draft = this.store.getDraft(q.itemId);
-    this.store.writeDraft(q.itemId, { ...draft, status });
+    this.write(q.itemId, { ...draft, status });
     this.covered.add(q.number);
     return { ok: true, number: q.number, status };
   }
@@ -258,7 +275,7 @@ export class Interview {
   }
 
   private readback(): ToolResult {
-    this.readbackGiven = true;
+    this.readbackAtTurn = this.reviewerTurns;
     return {
       answers: this.brief.questions.map((q) => {
         const draft = this.store.getDraft(q.itemId);
@@ -278,12 +295,16 @@ export class Interview {
   }
 
   private async submit(): Promise<ToolResult> {
-    if (!this.readbackGiven) {
+    if (this.submitted) return { ok: true, message: "Already submitted. Say goodbye." };
+    if (this.readbackAtTurn === null) {
       return { error: "Read back the answers first: call get_readback, read it, and get the reviewer's confirmation." };
     }
-    if (this.submitted) return { ok: true, message: "Already submitted. Say goodbye." };
+    if (this.reviewerTurns <= this.readbackAtTurn) {
+      return { error: "Read the answers back to the reviewer and wait for them to confirm before submitting." };
+    }
+    this.submitting = this.store.submit();
     try {
-      await this.store.submit();
+      await this.submitting;
     } catch (err) {
       return {
         error: `Submitting failed (${err instanceof Error ? err.message : "unknown error"}). Tell the reviewer their answers are saved as a draft and they can submit from the page.`,
@@ -295,6 +316,12 @@ export class Interview {
   }
 
   // --- helpers -------------------------------------------------------------
+
+  /** Every write goes through here: it voids an earlier read-back. */
+  private write(itemId: string, draft: InterviewDraft): void {
+    this.readbackAtTurn = null;
+    this.store.writeDraft(itemId, draft);
+  }
 
   private withQuestion(args: Args, run: (q: VoiceBriefQuestion) => ToolResult): ToolResult {
     const q = typeof args.number === "number" ? this.question(args.number) : undefined;

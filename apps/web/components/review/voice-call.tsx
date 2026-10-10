@@ -86,6 +86,9 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
   const audioRef = useRef<HTMLAudioElement>(null);
   const callRef = useRef<RealtimeCall | null>(null);
   const syncRef = useRef<TranscriptSync | null>(null);
+  // Set by Hang up or unmount while the call is still being prepared, so start()
+  // stops at its next step instead of opening a mic nobody can close.
+  const abortedRef = useRef(false);
   // Tool calls read the store at call time, not at the render that started the call.
   const responsesRef = useRef(responses);
   responsesRef.current = responses;
@@ -103,17 +106,30 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
   // Unmount (navigating away mid-call): release the mic and save the tail.
   useEffect(
     () => () => {
+      abortedRef.current = true;
       callRef.current?.dispose();
       void syncRef.current?.close("ended");
     },
     [],
   );
 
+  const hangUp = useCallback(() => {
+    if (callRef.current) {
+      callRef.current.hangup();
+      return;
+    }
+    // Still preparing: nothing is open yet; make start() stand down.
+    abortedRef.current = true;
+    setPhase("ended");
+    setMessage("Call cancelled.");
+  }, []);
+
   const start = useCallback(async () => {
     setMessage(null);
     setCaption("");
     setLastHeard("");
     setQuestion(null);
+    abortedRef.current = false;
 
     const audio = audioRef.current;
     if (!audio) {
@@ -126,15 +142,22 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
     try {
       setPhase("preparing");
       await postJson(`/api/documents/${docId}/voice/brief`);
+      if (abortedRef.current) return;
       setPhase("connecting");
       session = await postJson<SessionResponse>(`/api/documents/${docId}/voice/session`);
     } catch (err) {
+      if (abortedRef.current) return;
       setPhase("error");
       setMessage(err instanceof Error ? err.message : "Could not start the call.");
       return;
     }
 
     const sync = new TranscriptSync(session.sessionId, fetch.bind(window));
+    if (abortedRef.current) {
+      // Cancelled while the key was being minted: close the record, open nothing.
+      void sync.close("ended");
+      return;
+    }
     syncRef.current = sync;
     sync.start();
     const now = () => new Date().toISOString();
@@ -148,9 +171,12 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
       .map((m) => m.itemId);
 
     const store: InterviewStore = {
-      getDraft: (itemId) => responsesRef.current.getDraft(itemId),
+      // latestDraft, not getDraft: several tool calls can land before React renders.
+      getDraft: (itemId) => responsesRef.current.latestDraft(itemId),
       writeDraft: (itemId, draft) => responsesRef.current.writeDraft(itemId, draft),
       submit: async () => {
+        // Every spoken answer must be saved before the review is marked done.
+        await responsesRef.current.flushPending();
         const res = await fetch(`/api/documents/${docId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -179,6 +205,7 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
       },
       {
         onToolCall: (name, args) => interview.execute(name, args),
+        onReviewerTurn: () => interview.noteReviewerTurn(),
         onToolRecord: (r) => sync.push({ role: "tool", at: now(), name: r.name, args: r.args, result: r.result }),
         onUtterance: (role, text) => {
           sync.push({ role, at: now(), text });
@@ -189,16 +216,27 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
           if (p === "live") setPhase("live");
         },
         onEnded: (reason, detail) => {
-          const submitted = interview.isSubmitted;
-          // Once the transcript has landed, refresh so the "Voice calls" panel shows it.
-          void sync.close(submitted ? "submitted" : "ended").then(() => router.refresh());
-          setPhase(reason === "error" ? "error" : "ended");
-          setMessage(reason === "error" ? (detail ?? END_MESSAGE.error) : END_MESSAGE[submitted ? "submitted" : reason]);
-          setCaption("");
           callRef.current = null;
+          setCaption("");
+          // A hang-up can land while the submit is in flight: wait for it, so the
+          // record and the message reflect what actually happened.
+          void interview.settled().then(async () => {
+            const submitted = interview.isSubmitted;
+            setPhase(reason === "error" ? "error" : "ended");
+            setMessage(
+              reason === "error" ? (detail ?? END_MESSAGE.error) : END_MESSAGE[submitted ? "submitted" : reason],
+            );
+            // Once the transcript has landed, refresh so the "Voice calls" panel shows it.
+            await sync.close(submitted ? "submitted" : "ended");
+            router.refresh();
+          });
         },
       },
     );
+    if (abortedRef.current) {
+      void sync.close("ended");
+      return;
+    }
     callRef.current = call;
     await call.start({ clientSecret: session.clientSecret, callsUrl: session.callsUrl });
   }, [docId, focus, responses, router]);
@@ -229,8 +267,7 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
         ) : (
           <button
             type="button"
-            onClick={() => callRef.current?.hangup()}
-            disabled={phase !== "live" && phase !== "connecting"}
+            onClick={hangUp}
             className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-50"
           >
             Hang up

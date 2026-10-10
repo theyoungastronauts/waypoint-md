@@ -65,6 +65,14 @@ interface ResponsesApi {
    * Bumps the external revision so the card re-seeds its fields from the store.
    */
   writeDraft: (itemId: string, draft: Draft) => void;
+  /**
+   * The newest draft for an item, including writes made since the last render.
+   * {@link getDraft} reads render state, which lags a burst of writes made in one
+   * tick (several voice tool calls in a row); this never does.
+   */
+  latestDraft: (itemId: string) => Draft;
+  /** Resolves once every queued autosave has been sent (succeeded or failed). */
+  flushPending: () => Promise<void>;
   /** A monotonically-increasing counter bumped on each external edit of an item. */
   externalRev: (itemId: string) => number;
   toggleFlag: (itemId: string) => void;
@@ -158,6 +166,8 @@ export function ResponsesProvider({
   // a stale in-flight response can't flip the tick to "Saved" over newer state.
   const chainRef = useRef(new Map<string, Promise<unknown>>());
   const seqRef = useRef(new Map<string, number>());
+  // Drafts as of the latest write, ahead of render state (see latestDraft).
+  const latestRef = useRef<Record<string, Draft>>(state.drafts);
 
   const mutation = useMutation({
     mutationFn: async (vars: { itemId: string; body: unknown }) => {
@@ -174,6 +184,7 @@ export function ResponsesProvider({
   const saveResponse = useCallback(
     (itemId: string, draft: Draft) => {
       // Optimistic: reflect the draft immediately (progress ring, status dots).
+      latestRef.current = { ...latestRef.current, [itemId]: draft };
       dispatch({ kind: "commit", itemId, draft });
       const body = draftToBody(typeById[itemId], draft);
 
@@ -240,6 +251,16 @@ export function ResponsesProvider({
     [saveResponse],
   );
 
+  const latestDraft = useCallback(
+    (itemId: string): Draft =>
+      latestRef.current[itemId] ?? { text: "", selected: [], other: "", status: null },
+    [],
+  );
+
+  const flushPending = useCallback(async () => {
+    await Promise.all([...chainRef.current.values()].map((p) => p.catch(() => {})));
+  }, []);
+
   const toggleStatus = useCallback(
     (itemId: string, target: "flagged" | "skipped") => {
       const draft = getDraft(itemId);
@@ -270,6 +291,8 @@ export function ResponsesProvider({
       saveContent,
       insertIntoAnswer,
       writeDraft,
+      latestDraft,
+      flushPending,
       externalRev: (itemId) => state.rev[itemId] ?? 0,
       toggleFlag: (itemId) => toggleStatus(itemId, "flagged"),
       toggleSkip: (itemId) => toggleStatus(itemId, "skipped"),
@@ -286,6 +309,8 @@ export function ResponsesProvider({
     saveContent,
     insertIntoAnswer,
     writeDraft,
+    latestDraft,
+    flushPending,
     toggleStatus,
     markAnswered,
     order,

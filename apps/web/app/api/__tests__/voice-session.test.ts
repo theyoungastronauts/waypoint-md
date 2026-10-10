@@ -31,6 +31,7 @@ import { ingestDocument } from "@/lib/ingest/service";
 import { CLIENT_SECRETS_URL, REALTIME_MODEL } from "@/lib/voice/realtime";
 import { MAX_TRANSCRIPT_ENTRIES } from "@/lib/voice/transcript";
 import { updateVoiceSession } from "@/lib/voice/sessions";
+import { updateDocument } from "@/lib/documents";
 
 const kitchenSink = readFileSync(
   path.resolve(process.cwd(), "packages/spec/fixtures/kitchen-sink.md"),
@@ -162,6 +163,11 @@ describe("PATCH /api/voice-sessions/:id", () => {
     return (await (await start(id)).json()).sessionId;
   }
 
+  async function completeDocumentOf(sessionId: string): Promise<void> {
+    const documentId = (await (await get(sessionId)).json()).session.documentId;
+    updateDocument(documentId, { status: "completed" });
+  }
+
   it("appends transcript entries across calls and records the style", async () => {
     const sid = await newSession();
     await patch(sid, {
@@ -181,9 +187,17 @@ describe("PATCH /api/voice-sessions/:id", () => {
     expect(full.transcript.map((e: { role: string }) => e.role)).toEqual(["voice", "reviewer", "tool"]);
   });
 
+  it("refuses submitted while the document is not completed (409)", async () => {
+    const sid = await newSession();
+    const res = await patch(sid, { status: "submitted" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("not_submitted");
+  });
+
   it("keeps submitted when a later hang-up reports ended", async () => {
     const sid = await newSession();
-    await patch(sid, { status: "submitted" });
+    await completeDocumentOf(sid);
+    expect((await patch(sid, { status: "submitted" })).status).toBe(200);
     const res = await patch(sid, { status: "ended" });
     const { session } = await res.json();
     expect(session.status).toBe("submitted");

@@ -261,8 +261,27 @@ describe("read-back and submit", () => {
     ]);
   });
 
-  it("submits after the read-back, then asks the call to end", async () => {
+  it("refuses a submit in the same turn as the read-back (the reviewer has not confirmed)", async () => {
     await run("get_readback");
+    const res = await run("submit_review");
+    expect(res.error).toMatch(/wait for them to confirm/);
+    expect(store.submit).not.toHaveBeenCalled();
+  });
+
+  it("voids the read-back when an answer changes after it", async () => {
+    await run("get_readback");
+    interview.noteReviewerTurn(); // "Actually, make 1 two quarters."
+    await run("record_answer", { number: 1, text: "Two quarters." });
+    expect((await run("submit_review")).error).toMatch(/Read back the answers first/);
+
+    await run("get_readback");
+    interview.noteReviewerTurn(); // "Yes, that's right."
+    expect((await run("submit_review")).ok).toBe(true);
+  });
+
+  it("submits after the read-back and the reviewer's confirmation, then asks the call to end", async () => {
+    await run("get_readback");
+    interview.noteReviewerTurn();
     const res = await run("submit_review");
     expect(res.ok).toBe(true);
     expect(store.submit).toHaveBeenCalledTimes(1);
@@ -278,6 +297,7 @@ describe("read-back and submit", () => {
       throw new Error("HTTP 500");
     });
     await run("get_readback");
+    interview.noteReviewerTurn();
     const res = await run("submit_review");
     expect(res.error).toMatch(/Submitting failed \(HTTP 500\)/);
     expect(store.endCall).not.toHaveBeenCalled();

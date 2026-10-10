@@ -221,6 +221,7 @@ describe("VoiceCall", () => {
     expect(calls((u) => u === `/api/documents/${DOC_ID}`)).toHaveLength(0);
 
     emit(toolCall("get_readback", {}, "c5"));
+    emit({ type: "input_audio_buffer.speech_started" }); // "Yes, that's right."
     emit(toolCall("submit_review", {}, "c6"));
     await waitFor(() => expect(calls((u) => u === `/api/documents/${DOC_ID}`)).toHaveLength(1));
     expect(JSON.parse(calls((u) => u === `/api/documents/${DOC_ID}`)[0][1]!.body as string)).toEqual({ status: "completed" });
@@ -270,5 +271,101 @@ describe("VoiceCall", () => {
     });
     // The page refreshes so the new transcript appears under "Voice calls".
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+});
+
+describe("VoiceCall — review fixes", () => {
+  async function connect() {
+    fireEvent.click(await screen.findByRole("button", { name: /talk/i }));
+    await waitFor(() => expect(calls((u) => u.includes("realtime/calls")).length).toBe(1));
+    act(() => {
+      peer.channel.readyState = "open";
+      peer.channel.onopen?.();
+    });
+    await screen.findByText("On the call");
+  }
+
+  it("keeps the answer when the model records and flags in one batch", async () => {
+    renderCall();
+    await connect();
+    emit({
+      type: "response.done",
+      response: {
+        output: [
+          { type: "function_call", name: "record_answer", call_id: "b1", arguments: '{"number":1,"options":[2]}' },
+          { type: "function_call", name: "flag_question", call_id: "b2", arguments: '{"number":1}' },
+        ],
+      },
+    });
+    await waitFor(() => {
+      const puts = calls((u) => u === `/api/items/${ITEM_ID}/response`);
+      expect(puts).toHaveLength(2);
+      expect(JSON.parse(puts.at(-1)![1]!.body as string)).toEqual({
+        value: { selected: ["Per-device tokens"] },
+        status: "flagged",
+      });
+    });
+  });
+
+  it("Hang up while preparing cancels: no session, no mic", async () => {
+    let releaseBrief!: () => void;
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/voice/brief")) {
+        await new Promise<void>((r) => (releaseBrief = r));
+      }
+      return base(url, init);
+    });
+    renderCall();
+    fireEvent.click(await screen.findByRole("button", { name: /talk/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /hang up/i }));
+    expect(await screen.findByText("Call cancelled.")).toBeTruthy();
+    releaseBrief();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls((u) => u.endsWith("/voice/session"))).toHaveLength(0);
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("unmounting while connecting opens no mic and closes the call record", async () => {
+    let releaseSession!: () => void;
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/voice/session")) await new Promise<void>((r) => (releaseSession = r));
+      return base(url, init);
+    });
+    renderCall();
+    fireEvent.click(await screen.findByRole("button", { name: /talk/i }));
+    await waitFor(() => expect(calls((u) => u.endsWith("/voice/session"))).toHaveLength(1));
+    cleanup();
+    releaseSession();
+    await waitFor(() => {
+      const last = calls((u) => u === "/api/voice-sessions/vs-1").at(-1);
+      expect(last && JSON.parse(last[1]!.body as string)).toEqual({ status: "ended" });
+    });
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("submit waits for the last answer to save before marking the review completed", async () => {
+    let releasePut!: () => void;
+    const order: string[] = [];
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === `/api/items/${ITEM_ID}/response`) {
+        await new Promise<void>((r) => (releasePut = r));
+        order.push("put");
+      }
+      if (url === `/api/documents/${DOC_ID}`) order.push("complete");
+      return base(url, init);
+    });
+    renderCall();
+    await connect();
+    emit(toolCall("record_answer", { number: 1, options: [1] }, "s1"));
+    emit(toolCall("get_readback", {}, "s2"));
+    emit({ type: "input_audio_buffer.speech_started" });
+    emit(toolCall("submit_review", {}, "s3"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(order).toEqual([]);
+    releasePut();
+    await waitFor(() => expect(order).toEqual(["put", "complete"]));
   });
 });

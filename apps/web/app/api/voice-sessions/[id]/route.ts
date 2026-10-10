@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { HttpError, toErrorResponse } from "@/lib/api/http";
+import { getDocumentDetail } from "@/lib/documents";
 import { getVoiceSession, updateVoiceSession } from "@/lib/voice/sessions";
 import { transcriptEntrySchema } from "@/lib/voice/transcript";
 
@@ -42,6 +43,18 @@ export async function PATCH(req: Request, ctx: RouteContext): Promise<NextRespon
       throw new HttpError(400, "invalid_json", "Request body was not valid JSON.");
     });
     const input = patchSchema.parse(body);
+
+    // "submitted" is a claim about the document, so it is checked against it:
+    // the record can only say submitted once the review really is completed.
+    if (input.status === "submitted") {
+      const session = getVoiceSession(id);
+      if (!session) throw new HttpError(404, "not_found", "No voice call with that id.");
+      const status = getDocumentDetail(session.documentId)?.status;
+      if (status !== "completed" && status !== "pulled") {
+        throw new HttpError(409, "not_submitted", "The review has not been marked completed.");
+      }
+    }
+
     const updated = updateVoiceSession(id, input);
     if (!updated) throw new HttpError(404, "not_found", "No voice call with that id.");
     return NextResponse.json({
