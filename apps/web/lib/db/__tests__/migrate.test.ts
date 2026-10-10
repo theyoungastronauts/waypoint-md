@@ -23,6 +23,8 @@ const EXPECTED_TABLES = [
   "attachments",
   "review_links",
   "media_comments",
+  "voice_briefs",
+  "voice_sessions",
 ];
 
 const EXPECTED_TRIGGERS = ["publications_fts_ai", "publications_fts_ad", "publications_fts_au"];

@@ -3,6 +3,7 @@ import { SPEC_VERSION } from "@waypoint/spec";
 
 import { aiEnabled } from "@/lib/ai/config";
 import { publishEnabled } from "@/lib/publish/config";
+import { voiceEnabled } from "@/lib/voice/config";
 import { APP_VERSION } from "@/lib/version";
 
 // Always fresh — this is the CLI handshake target (§8), not a static asset.
@@ -17,5 +18,6 @@ export function GET() {
     // available. Never the secrets themselves — just whether they are configured.
     aiEnabled: aiEnabled(),
     publishEnabled: publishEnabled(),
+    voiceEnabled: voiceEnabled(),
   });
 }

@@ -36,6 +36,13 @@
       "when": 1789444806968,
       "tag": "0004_natural_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791601748470,
+      "tag": "0005_calm_meteorite",
+      "breakpoints": true
     }
   ]
 }

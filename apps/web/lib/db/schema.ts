@@ -260,3 +260,58 @@ export const mediaComments = sqliteTable(
     index("media_comments_unresolved_idx").on(table.publicationId, table.resolvedAt),
   ],
 );
+
+/**
+ * A cached "voice brief" (Waypoint Voice): the document rewritten to be heard,
+ * made by Claude the first time a call is started and reused until the document
+ * changes. `cache_key` hashes `raw_md`, the item set and the brief format
+ * version, so a re-structured document or a new brief format makes a fresh one.
+ * `brief` is the validated JSON the voice model is given (see `lib/voice/brief.ts`).
+ */
+export const voiceBriefs = sqliteTable(
+  "voice_briefs",
+  {
+    id: id(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id),
+    cacheKey: text("cache_key").notNull(),
+    /** The Claude model that wrote it, for transparency. */
+    model: text("model").notNull(),
+    brief: text("brief", { mode: "json" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [uniqueIndex("voice_briefs_doc_key_idx").on(table.documentId, table.cacheKey)],
+);
+
+/**
+ * One voice call against a document (Waypoint Voice). Created when the server
+ * mints the call's short-lived Realtime key; the browser appends to
+ * `transcript` as the call goes, so a dropped call keeps what was said.
+ *
+ * `transcript` is a JSON array of entries (`lib/voice/transcript.ts`): what the
+ * reviewer said, what the voice model said, and each tool call it made, so a
+ * misheard answer can be checked against what was actually written.
+ */
+export const voiceSessions = sqliteTable(
+  "voice_sessions",
+  {
+    id: id(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id),
+    /** The Realtime model the call ran on. */
+    model: text("model").notNull(),
+    /** brief | thorough — set when the reviewer picks at the start; null until then. */
+    mode: text("mode"),
+    /** active | ended | submitted */
+    status: text("status").notNull().default("active"),
+    transcript: text("transcript", { mode: "json" }).notNull(),
+    startedAt: text("started_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    endedAt: text("ended_at"),
+    submittedAt: text("submitted_at"),
+  },
+  (table) => [index("voice_sessions_document_idx").on(table.documentId)],
+);
