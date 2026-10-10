@@ -47,10 +47,15 @@ export function ChoiceGroup({
   const [selected, setSelected] = useState<string[]>(() => getDraft(itemId).selected);
   const [other, setOther] = useState(() => getDraft(itemId).other);
 
-  // Re-seed the elaboration field when it is edited externally (§14 insert).
+  // Re-seed from the store when the item is edited externally: the elaboration
+  // by an insert (§14), the selection too by a spoken answer (Waypoint Voice).
   const rev = externalRev(itemId);
   useEffect(() => {
-    if (rev > 0) setOther(getDraft(itemId).other);
+    if (rev > 0) {
+      const draft = getDraft(itemId);
+      setOther(draft.other);
+      setSelected(draft.selected);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rev]);
 

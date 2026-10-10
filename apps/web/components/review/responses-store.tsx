@@ -58,6 +58,13 @@ interface ResponsesApi {
    * textarea from the store rather than clobbering the insert on next keystroke.
    */
   insertIntoAnswer: (itemId: string, text: string, mode: InsertMode) => void;
+  /**
+   * Replace an item's whole draft, status included, and autosave it (Waypoint
+   * Voice). Unlike {@link saveContent}, the status is taken as given — a spoken
+   * answer to a flagged question is a decision, not an edit under a sticky flag.
+   * Bumps the external revision so the card re-seeds its fields from the store.
+   */
+  writeDraft: (itemId: string, draft: Draft) => void;
   /** A monotonically-increasing counter bumped on each external edit of an item. */
   externalRev: (itemId: string) => number;
   toggleFlag: (itemId: string) => void;
@@ -225,6 +232,14 @@ export function ResponsesProvider({
     [getDraft, typeById, saveResponse],
   );
 
+  const writeDraft = useCallback(
+    (itemId: string, draft: Draft) => {
+      saveResponse(itemId, draft);
+      dispatch({ kind: "bumpRev", itemId });
+    },
+    [saveResponse],
+  );
+
   const toggleStatus = useCallback(
     (itemId: string, target: "flagged" | "skipped") => {
       const draft = getDraft(itemId);
@@ -254,6 +269,7 @@ export function ResponsesProvider({
       getSave: (itemId) => state.save[itemId] ?? "idle",
       saveContent,
       insertIntoAnswer,
+      writeDraft,
       externalRev: (itemId) => state.rev[itemId] ?? 0,
       toggleFlag: (itemId) => toggleStatus(itemId, "flagged"),
       toggleSkip: (itemId) => toggleStatus(itemId, "skipped"),
@@ -269,6 +285,7 @@ export function ResponsesProvider({
     getDraft,
     saveContent,
     insertIntoAnswer,
+    writeDraft,
     toggleStatus,
     markAnswered,
     order,
