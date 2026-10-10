@@ -12,6 +12,7 @@ import { ItemCard } from "./item-card";
 import { KeyboardNav } from "./keyboard-nav";
 import { MobileSheet } from "./mobile-sheet";
 import { ResponsesProvider } from "./responses-store";
+import { VoiceCall } from "./voice-call";
 import { ReviewRail } from "./review-rail";
 import { UnanchoredComments } from "./unanchored-comments";
 import type { ReviewItemInit, ReviewSegment } from "./types";
@@ -29,6 +30,7 @@ export function ReviewView({
   syntheticInits = [],
   comments,
   aiEnabled,
+  voiceEnabled = false,
   initialChat,
 }: {
   docId: string;
@@ -38,6 +40,8 @@ export function ReviewView({
   comments: CommentView[];
   /** Server-driven capability flag (§14): whether the AI sidebar renders. */
   aiEnabled: boolean;
+  /** Server-driven capability flag (Waypoint Voice): whether the Talk button renders. */
+  voiceEnabled?: boolean;
   /** The persisted chat thread for this document (empty when AI is off). */
   initialChat: AgentMessage[];
 }) {
@@ -90,6 +94,12 @@ export function ReviewView({
           {completed && (
             <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400">
               Review marked completed. You can keep editing and download the annotated file anytime.
+            </div>
+          )}
+
+          {voiceEnabled && allInits.length > 0 && (
+            <div className="mt-4">
+              <VoiceCall docId={docId} onSubmitted={onCompleted} />
             </div>
           )}
 

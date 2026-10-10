@@ -35,6 +35,8 @@ export interface InterviewStore {
   setStyle(style: "brief" | "thorough"): void;
   /** Ask the call to hang up once the model's goodbye has played. */
   endCall(reason: "submitted" | "stopped"): void;
+  /** Bring a question's card into view while it is being discussed. Optional. */
+  showQuestion?(itemId: string, number: number): void;
 }
 
 type Args = Record<string, unknown>;
@@ -126,6 +128,7 @@ export class Interview {
   }
 
   private present(q: VoiceBriefQuestion): ToolResult {
+    this.store.showQuestion?.(q.itemId, q.number);
     const draft = this.store.getDraft(q.itemId);
     const result: ToolResult = {
       number: q.number,

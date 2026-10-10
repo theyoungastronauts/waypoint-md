@@ -303,3 +303,16 @@ describe("other tools", () => {
     expect((await run("delete_everything")).error).toMatch(/no tool called/);
   });
 });
+
+describe("showQuestion", () => {
+  it("is told which question is being presented", async () => {
+    const showQuestion = vi.fn();
+    interview = new Interview(brief, { ...store, showQuestion });
+    await run("next_question");
+    await run("go_to_question", { number: 3 });
+    expect(showQuestion.mock.calls).toEqual([
+      ["i1", 1],
+      ["i3", 3],
+    ]);
+  });
+});

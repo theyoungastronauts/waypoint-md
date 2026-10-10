@@ -12,6 +12,7 @@ import { listChatMessages } from "@/lib/chat";
 import { getDocumentDetail } from "@/lib/documents";
 import { relativeTime, sourceLabel, statusMeta } from "@/lib/format";
 import { buildSyntheticInits, renderReviewDocument } from "@/lib/render/review";
+import { voiceEnabled } from "@/lib/voice/config";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,7 @@ export default async function DocumentPage({ params }: DocPageProps) {
         segments={segments}
         syntheticInits={syntheticInits}
         aiEnabled={ai}
+        voiceEnabled={voiceEnabled()}
         initialChat={initialChat}
         comments={doc.comments.map((c) => ({
           id: c.id,
