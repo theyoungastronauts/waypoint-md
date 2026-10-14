@@ -265,10 +265,9 @@ describe("VoiceCall", () => {
     fireEvent.click(await screen.findByRole("button", { name: /hang up/i }));
     expect(await screen.findByText(/saved as a draft/)).toBeTruthy();
     expect(track.stop).toHaveBeenCalled();
-    await waitFor(() => {
-      const last = calls((u) => u === "/api/voice-sessions/vs-1").at(-1)!;
-      expect(JSON.parse(last[1]!.body as string)).toEqual({ status: "ended" });
-    });
+    // The end message only shows once the final transcript save has been sent.
+    const last = calls((u) => u === "/api/voice-sessions/vs-1").at(-1)!;
+    expect(JSON.parse(last[1]!.body as string)).toEqual({ status: "ended" });
     // The page refreshes so the new transcript appears under "Voice calls".
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });

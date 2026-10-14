@@ -223,11 +223,12 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
           void interview.settled().then(async () => {
             const submitted = interview.isSubmitted;
             setPhase(reason === "error" ? "error" : "ended");
+            setMessage("Saving the transcript…");
+            // The end message says the transcript is saved, so it waits for the save.
+            await sync.close(submitted ? "submitted" : "ended");
             setMessage(
               reason === "error" ? (detail ?? END_MESSAGE.error) : END_MESSAGE[submitted ? "submitted" : reason],
             );
-            // Once the transcript has landed, refresh so the "Voice calls" panel shows it.
-            await sync.close(submitted ? "submitted" : "ended");
             router.refresh();
           });
         },

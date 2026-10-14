@@ -20,7 +20,7 @@ import type { DocumentDetail } from "@/lib/documents";
  */
 
 /** Bumped whenever the brief's shape or prompt changes, so cached briefs regenerate. */
-export const BRIEF_FORMAT_VERSION = 1;
+export const BRIEF_FORMAT_VERSION = 2;
 
 /** Ceiling on the document text handed to Claude alongside the questions. */
 export const BRIEF_SOURCE_CAP = 60_000;
@@ -157,7 +157,8 @@ export const BRIEF_SYSTEM_PROMPT = [
   "    bullet lists, no URLs or code read character by character. Keep its meaning exactly.",
   "  - `options` (choice questions only): one short spoken phrase per option, in the SAME",
   "    order and the SAME count as given. Short enough to hold in your head after hearing",
-  "    them once, but distinct from each other.",
+  "    them once, but distinct from each other. Do not mark or mention the author's",
+  "    suggestion in these phrases; it is reported to the voice model separately.",
   "  - `notes`: background the reviewer might ask about (\"why did you suggest that?\",",
   "    \"what's the cost difference?\"), drawn ONLY from the document. Include the author's",
   "    rationale when there is one. Spoken style. Empty list if there is nothing useful.",
