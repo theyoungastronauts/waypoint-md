@@ -77,7 +77,7 @@ export const VOICE_TOOLS: RealtimeFunctionTool[] = [
     description: [
       "Write the reviewer's answer to a question into the review. This replaces what was there.",
       "Choice questions: pass `options` as the option numbers they chose (one for single-select); omit it only if they answered in words without picking any option.",
-      "Anything they add as explanation goes in `note`, in their words.",
+      "Use `note` only when they add a reason or condition beyond the choice, in their own words and first person (\"walking distance matters more to me\"), never a description of them (\"they asked for…\"). Omit it otherwise.",
       "Free-text questions: pass their answer as `text`, faithful to their words (tidied, nothing added).",
       "If they accept the answer already on the question, pass keep_current=true instead.",
       "If it returns an error, follow its message.",

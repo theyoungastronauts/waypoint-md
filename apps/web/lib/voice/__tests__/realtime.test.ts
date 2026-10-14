@@ -40,6 +40,11 @@ describe("buildInstructions", () => {
     expect(text).not.toContain("weekend on-call");
   });
 
+  it("tells the model not to narrate tool calls, and keeps notes in the reviewer's words", () => {
+    expect(text).toMatch(/Never announce what you are about to do/);
+    expect(text).toMatch(/never describe or summarize them/);
+  });
+
   it("requires the read-back before submit", () => {
     expect(text).toMatch(/Never call submit_review before the reviewer has heard the read-back/);
   });

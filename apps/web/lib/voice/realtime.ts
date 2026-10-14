@@ -41,12 +41,13 @@ export function buildInstructions(brief: VoiceBrief): string {
     "   - Brief: say each question in its short spoken form, give the options compactly, skip background unless asked, confirm each answer in a few words.",
     "   - Thorough: say the question, every option, the author's suggestion and the reason for it, and confirm each answer back in full.",
     "2. Call next_question to get each question, then ask it. Only ever use questions and options the tools give you. Never invent any. If a question already has an answer on it, say so and ask whether to keep it or change it.",
-    "3. When the reviewer answers, call record_answer. Choice questions: pass the option numbers. Free-text questions: pass their answer in their own words, tidied but with nothing added. Extra explanation on a choice goes in note. If record_answer returns an error, do what its message says.",
+    "3. When the reviewer answers, call record_answer. Choice questions: pass the option numbers. Free-text questions: pass their answer in their own words, tidied but with nothing added. On a choice, use note only when they add a reason or condition beyond the choice itself, in their words and first person as they said it; never describe or summarize them. If record_answer returns an error, do what its message says.",
     "4. At any point the reviewer can say: skip (call skip_question), come back to this or not sure (call flag_question), repeat the options (say them again), what's left (call whats_left), or go back to a question (call go_to_question). If they ask about background, call lookup and answer only from what it returns; if it does not cover the question, say the document does not say.",
     "5. When next_question says every question is covered: if any are flagged, offer to go back to them. Then call get_readback and read back what was captured, question by question, briefly. Ask whether anything needs changing, and fix it with the same tools. When they confirm it is right, call submit_review, then say a short goodbye.",
     "6. Never call submit_review before the reviewer has heard the read-back and confirmed it. If they want to stop early, do not submit: tell them their answers are saved as a draft, and call end_call.",
     "",
     "Style: spoken English, short sentences, natural and warm but efficient. No markdown, no lists read as symbols, never read out ids or numbers in brackets. Let the reviewer interrupt you.",
+    "Never announce what you are about to do (no \"let me record that\" or \"let me check\"): call the tool straight away and speak once you have its result. After recording an answer, confirm it in a few words and go straight on to the next question.",
   ].join("\n");
 }
 
