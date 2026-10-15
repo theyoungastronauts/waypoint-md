@@ -60,7 +60,8 @@ const brief: VoiceBrief = {
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-function setup(opts: { openFails?: boolean } = {}) {
+function setup(opts: { openFails?: boolean; securityPin?: string | null } = {}) {
+  const securityPin = opts.securityPin === undefined ? "2468" : opts.securityPin;
   const socket = new FakeSocket();
   const drafts: Record<string, InterviewDraft> = {};
   const recorded: TranscriptEntry[] = [];
@@ -87,6 +88,7 @@ function setup(opts: { openFails?: boolean } = {}) {
     socket: socket as unknown as SidebandSocket,
     findByPin: vi.fn((pin: string) => (pin === "4821" ? { id: "doc-1", title: "Kitchen" } : null)),
     findLatest: vi.fn(() => ({ id: "doc-2", title: "Offsite plan" })),
+    checkSecurityPin: vi.fn((d: string) => (securityPin === null ? null : d === securityPin)),
     openReview: vi.fn(async () => {
       if (opts.openFails) throw new Error("brief failed");
       return review;
@@ -119,7 +121,11 @@ function setup(opts: { openFails?: boolean } = {}) {
     });
   };
   const responses = () => socket.sent.filter((e) => e.type === "response.create");
-  return { call, socket, deps, store, drafts, recorded, closed, timers, finishResponse, toolCall, responses };
+  /** Press keys one by one. */
+  const press = (keys: string) => {
+    for (const k of keys) socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: k });
+  };
+  return { call, socket, deps, store, drafts, recorded, closed, timers, finishResponse, toolCall, responses, press };
 }
 
 describe("PhoneCall — lobby", () => {
@@ -191,15 +197,58 @@ describe("PhoneCall — lobby", () => {
     expect(t.deps.openReview).not.toHaveBeenCalled();
   });
 
-  it("0 offers the latest review; a spoken yes opens it", async () => {
+  it("0 asks for the security PIN; the right one offers the latest review, and a spoken yes opens it", async () => {
     t.finishResponse();
-    t.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: "0" });
+    t.press("0");
+    await flush();
+    expect(JSON.stringify(t.responses().at(-1))).toContain("Enter your security PIN");
+    t.finishResponse();
+    t.press("2468#");
     await flush();
     expect(JSON.stringify(t.responses().at(-1))).toContain("Your latest review is Offsite plan");
     t.finishResponse();
     t.toolCall("open_review", { use_latest: true }, "c1");
     await flush();
     expect(t.deps.openReview).toHaveBeenCalledWith("doc-2");
+  });
+
+  it("a wrong security PIN offers nothing and counts as a miss", async () => {
+    t.finishResponse();
+    t.press("0");
+    await flush();
+    t.finishResponse();
+    t.press("1111#");
+    await flush();
+    expect(JSON.stringify(t.responses().at(-1))).toContain("security PIN didn't match");
+    expect(t.deps.findLatest).not.toHaveBeenCalled();
+    t.finishResponse();
+    t.toolCall("open_review", { use_latest: true }, "c1");
+    await flush();
+    expect(t.deps.openReview).not.toHaveBeenCalled();
+  });
+
+  it("security digits never open a review even if they match a review PIN", async () => {
+    t.finishResponse();
+    t.press("0");
+    await flush();
+    t.finishResponse();
+    t.press("4821#"); // a review PIN, typed while the security PIN is expected
+    await flush();
+    expect(t.deps.findByPin).not.toHaveBeenCalled();
+    expect(t.deps.openReview).not.toHaveBeenCalled();
+  });
+
+  it("spoken 'latest' goes through the same security PIN", async () => {
+    t.finishResponse();
+    t.toolCall("find_latest", {}, "c1");
+    await flush();
+    const out = t.socket.sent.find((e) => e.type === "conversation.item.create") as { item: { output: string } };
+    expect(JSON.parse(out.item.output)).toMatchObject({ needs_security_pin: true });
+    expect(JSON.parse(out.item.output).title).toBeUndefined();
+    t.finishResponse("Key in your security PIN, then pound.");
+    t.press("2468#");
+    await flush();
+    expect(JSON.stringify(t.responses().at(-1))).toContain("Your latest review is Offsite plan");
   });
 
   it("opens a spoken PIN through the tool, and reports a miss as a tool error", async () => {
@@ -221,6 +270,23 @@ describe("PhoneCall — lobby", () => {
     await flush();
     const out = t.socket.sent.find((e) => e.type === "conversation.item.create") as { item: { output: string } };
     expect(JSON.parse(out.item.output).error).toMatch(/find_latest/);
+  });
+});
+
+describe("PhoneCall — latest shortcut without a security PIN", () => {
+  it("is off: 0 says so, and find_latest refuses", async () => {
+    const t = setup({ securityPin: null });
+    t.socket.fire("open");
+    t.finishResponse();
+    t.press("0");
+    await flush();
+    expect(JSON.stringify(t.responses().at(-1))).toContain("isn't set up");
+    t.finishResponse();
+    t.toolCall("find_latest", {}, "c1");
+    await flush();
+    const out = t.socket.sent.filter((e) => e.type === "conversation.item.create").at(-1) as { item: { output: string } };
+    expect(JSON.parse(out.item.output).error).toMatch(/isn't set up/);
+    expect(t.deps.findLatest).not.toHaveBeenCalled();
   });
 });
 
@@ -312,7 +378,7 @@ describe("PhoneCall — failures", () => {
     t.socket.emit({ type: "error", error: { code: "invalid_value", message: "bad" } });
     t.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: "0" });
     await flush();
-    expect(JSON.stringify(t.responses().at(-1))).toContain("Your latest review is Offsite plan");
+    expect(JSON.stringify(t.responses().at(-1))).toContain("Enter your security PIN");
   });
 
   it("re-sends a response refused because another one was active, once that one ends", async () => {
@@ -363,8 +429,11 @@ describe("PhoneCall — review fixes", () => {
     const u = setup();
     (u.deps.findLatest as ReturnType<typeof vi.fn>).mockReturnValue(null);
     u.socket.fire("open");
-    u.socket.emit({ type: "response.created", response: { id: "greet" } }); // greeting playing
-    u.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: "0" });
+    u.finishResponse();
+    u.press("0");
+    await flush();
+    u.socket.emit({ type: "response.created", response: { id: "greet" } }); // "Enter your security PIN" playing
+    u.press("2468#");
     await flush();
     // The greeting finishes and its audio stops: neither may start the hang-up.
     u.socket.emit({ type: "response.output_audio_transcript.done", response_id: "greet", transcript: LOBBY_GREETING });

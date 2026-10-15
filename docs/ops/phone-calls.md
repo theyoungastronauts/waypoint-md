@@ -37,9 +37,12 @@ Add to `~/.waypoint/env` (it stays `chmod 600`):
 ```
 OPENAI_WEBHOOK_SECRET=whsec_...
 WAYPOINT_PHONE_ALLOWLIST=+1XXXXXXXXXX
+WAYPOINT_PHONE_PIN=<4 to 8 digits of your choosing>
 ```
 
 The allowlist is your own mobile number in `+1` form. Several numbers are comma-separated. Calls from any other number are declined before anything is said.
+
+`WAYPOINT_PHONE_PIN` is your personal security PIN for the "latest review" shortcut (press 0). Caller ID can be forged by someone dialling OpenAI directly, so the shortcut, which skips the review PIN, asks for this instead. It is keypad-only: spoken audio is transcribed into the call record, keypad presses are not. Without it, the shortcut is off and only review PINs work.
 
 ## 5. Tunnel: one more public path
 
@@ -68,4 +71,4 @@ Merge `feat/voice-phone`, build, and restart Waypoint (`launchctl kickstart -k g
 
 Logs (`~/.waypoint/logs/`) show `[phone] incoming … from an allowlisted number verstat=…` for each call. The `verstat` value is the carrier's caller-ID verification; once it's seen on real calls, Waypoint can require it.
 
-**Saved contact for CarPlay:** PINs change with each review, so the handy contact is the "latest" one: the number followed by `,,0` (e.g. `+1778…,,0`). The phone presses 0 after the greeting starts, Waypoint names your newest open review, and you say yes. For a specific review, dial the number, then `,,` and its PIN.
+**Saved contact for CarPlay:** review PINs change with each review, so the handy contact is the "latest" one: the number, then `,,0,,`, your security PIN and `#` (e.g. `+1249…,,0,,246813#`). The phone presses 0 after the greeting, then keys your security PIN; Waypoint names your newest open review and you say yes. Keep that contact private: it holds the security PIN. For a specific review, dial the number, then `,,` and its PIN.

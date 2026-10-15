@@ -48,6 +48,11 @@ export interface PhoneCallDeps {
   socket: SidebandSocket;
   findByPin(pin: string): { id: string; title: string | null } | null;
   findLatest(): { id: string; title: string | null } | null;
+  /**
+   * Check keyed digits against the caller's security PIN, required before the
+   * "latest" shortcut. Null when no security PIN is set (shortcut off).
+   */
+  checkSecurityPin(digits: string): boolean | null;
   /** Prepare the review for voice: brief (made or cached), drafts, call record. */
   openReview(documentId: string): Promise<OpenedReview>;
   /** End the call for good (`POST /v1/realtime/calls/{id}/hangup`). */
@@ -86,6 +91,9 @@ export class PhoneCall {
   private readonly deps: PhoneCallDeps;
   private phase: Phase = "lobby";
   private digits = "";
+  /** What keypad digits mean right now: a review PIN, or the security PIN for "latest". */
+  private keypadMode: "review" | "security" = "review";
+  private securityPassed = false;
   private misses = 0;
   private latestOffered: { id: string; title: string | null } | null = null;
   private review: OpenedReview | null = null;
@@ -267,14 +275,19 @@ export class PhoneCall {
       this.digits = "";
       return;
     }
-    if (digit === "0" && this.digits === "") {
-      const latest = this.deps.findLatest();
-      if (!latest) {
-        this.say("There's no open review right now. Goodbye.", "stopped");
-        return;
+    if (this.keypadMode === "security") {
+      if (digit === "#") {
+        const entered = this.digits;
+        this.digits = "";
+        this.checkSecurity(entered);
+      } else if (/^\d$/.test(digit) && this.digits.length < 12) {
+        this.digits += digit;
       }
-      this.latestOffered = latest;
-      this.say(`Your latest review is ${latest.title ?? "untitled"}. Should I open it? Say yes, or enter a PIN.`);
+      return;
+    }
+    if (digit === "0" && this.digits === "") {
+      const ask = this.askForSecurityPin();
+      if (ask.say) this.say(ask.say);
       return;
     }
     if (digit === "#") {
@@ -296,17 +309,26 @@ export class PhoneCall {
     }
 
     if (name === "find_latest") {
-      const latest = this.deps.findLatest();
-      if (!latest) return { error: "There is no open review right now." };
-      this.latestOffered = latest;
-      return { title: latest.title ?? "Untitled review", message: "Tell them the title and ask if that's the one." };
+      if (this.locked) return { error: "No more tries on this call. Say goodbye." };
+      if (this.securityPassed && this.latestOffered) {
+        return { title: this.latestOffered.title ?? "Untitled review", message: "Tell them the title and ask if that's the one." };
+      }
+      const ask = this.askForSecurityPin();
+      if (ask.error) return { error: ask.error };
+      return {
+        needs_security_pin: true,
+        message:
+          "Ask them to key in their security PIN on the phone's keypad and press pound. Never ask them to say it out loud. Then wait; you'll be told what to say.",
+      };
     }
 
     if (name === "open_review") {
       if (this.locked) return { error: "No more tries on this call. Say goodbye." };
       if (this.phase !== "lobby") return { error: "A review is already opening." };
       if (args.use_latest === true) {
-        if (!this.latestOffered) return { error: "Call find_latest and confirm the title first." };
+        if (!this.securityPassed || !this.latestOffered) {
+          return { error: "Call find_latest first: the latest review needs the security PIN, then the caller confirms the title." };
+        }
         const doc = this.latestOffered;
         this.open(doc, false);
         return { ok: true, title: doc.title, message: `Say: "Opening ${doc.title ?? "it"}. One moment."` };
@@ -319,6 +341,51 @@ export class PhoneCall {
     }
 
     return { error: `There is no tool called ${name} yet. Ask which review they want.` };
+  }
+
+  /**
+   * Start the "latest" shortcut: switch the keypad to the security PIN. With no
+   * security PIN set, the shortcut is off and the caller is pointed at review PINs.
+   */
+  private askForSecurityPin(): { say: string; error?: string } {
+    if (this.securityPassed) {
+      this.offerLatest();
+      return { say: "" };
+    }
+    if (this.deps.checkSecurityPin("") === null) {
+      const msg = "The latest-review shortcut isn't set up. Enter a review PIN instead.";
+      return { say: msg, error: msg };
+    }
+    this.keypadMode = "security";
+    this.digits = "";
+    return { say: "Enter your security PIN, then press pound." };
+  }
+
+  private checkSecurity(entered: string): void {
+    this.keypadMode = "review";
+    if (this.deps.checkSecurityPin(entered) === true) {
+      this.securityPassed = true;
+      this.offerLatest();
+      return;
+    }
+    this.misses += 1;
+    if (this.misses >= MAX_PIN_MISSES) {
+      this.locked = true;
+      this.say("That PIN didn't match either. Goodbye.", "stopped");
+      return;
+    }
+    this.say("That security PIN didn't match. Press zero to try again, or enter a review PIN.");
+  }
+
+  /** Name the latest open review and ask the caller to confirm it. */
+  private offerLatest(): void {
+    const latest = this.deps.findLatest();
+    if (!latest) {
+      this.say("There's no open review right now. Goodbye.", "stopped");
+      return;
+    }
+    this.latestOffered = latest;
+    this.say(`Your latest review is ${latest.title ?? "untitled"}. Should I open it? Say yes, or enter a review PIN.`);
   }
 
   private tryPin(pin: string): void {

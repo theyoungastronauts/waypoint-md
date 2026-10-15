@@ -4,6 +4,8 @@ import {
   getPhoneAllowlist,
   getWebhookSecret,
   normalizePhoneNumber,
+  checkPhoneSecurityPin,
+  getPhoneSecurityPin,
   phoneEnabled,
   voiceEnabled,
 } from "@/lib/voice/config";
@@ -71,5 +73,23 @@ describe("phone gate and allowlist", () => {
     vi.stubEnv("WAYPOINT_PHONE_ALLOWLIST", "+16045550100");
     expect(phoneEnabled()).toBe(true);
     expect(getWebhookSecret()).toBe("whsec_abc");
+  });
+});
+
+describe("phone security PIN", () => {
+  it("accepts 4-8 digits and checks it exactly", () => {
+    vi.stubEnv("WAYPOINT_PHONE_PIN", " 246813 ");
+    expect(getPhoneSecurityPin()).toBe("246813");
+    expect(checkPhoneSecurityPin("246813")).toBe(true);
+    expect(checkPhoneSecurityPin("24681")).toBe(false);
+    expect(checkPhoneSecurityPin("")).toBe(false);
+  });
+
+  it("is off (null) when unset or malformed", () => {
+    vi.stubEnv("WAYPOINT_PHONE_PIN", "12ab");
+    expect(getPhoneSecurityPin()).toBeNull();
+    expect(checkPhoneSecurityPin("12ab")).toBeNull();
+    vi.stubEnv("WAYPOINT_PHONE_PIN", "123");
+    expect(getPhoneSecurityPin()).toBeNull();
   });
 });

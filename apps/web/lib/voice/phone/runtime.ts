@@ -4,6 +4,7 @@ import { getDocumentDetail, updateDocument } from "@/lib/documents";
 import { buildSyntheticInits, renderReviewDocument } from "@/lib/render/review";
 import { upsertResponse } from "@/lib/responses";
 import type { InterviewStore } from "../interview";
+import { checkPhoneSecurityPin } from "../config";
 import { getOrCreateBrief } from "../make-brief";
 import { findLatestLiveDocument, findLiveDocumentByPin, LIVE_STATUSES } from "../phone-pins";
 import { REALTIME_MODEL } from "../realtime";
@@ -67,6 +68,7 @@ export async function answerCall(apiKey: string, callId: string): Promise<void> 
     socket,
     findByPin: findLiveDocumentByPin,
     findLatest: findLatestLiveDocument,
+    checkSecurityPin: checkPhoneSecurityPin,
     openReview: openPhoneReview,
     hangup: () => control(apiKey, callId, "hangup"),
     setTimeout: (fn, ms) => setTimeout(fn, ms),

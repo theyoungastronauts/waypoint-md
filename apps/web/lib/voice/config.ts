@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { aiEnabled } from "@/lib/ai/config";
 
 /**
@@ -57,4 +58,24 @@ export function normalizePhoneNumber(input: string): string | null {
  */
 export function phoneEnabled(): boolean {
   return voiceEnabled() && getWebhookSecret() !== null && getPhoneAllowlist().length > 0;
+}
+
+/**
+ * The caller's own security PIN (`WAYPOINT_PHONE_PIN`, 4–8 digits), asked for on
+ * the keypad before the "latest review" shortcut opens anything (Tyler,
+ * 2026-10-15). Review PINs don't need it. Null when unset or malformed, which
+ * turns the shortcut off.
+ */
+export function getPhoneSecurityPin(): string | null {
+  const raw = process.env.WAYPOINT_PHONE_PIN?.trim() ?? "";
+  return /^\d{4,8}$/.test(raw) ? raw : null;
+}
+
+/** Constant-time check of keyed digits against the security PIN; null when none is set. */
+export function checkPhoneSecurityPin(entered: string): boolean | null {
+  const pin = getPhoneSecurityPin();
+  if (!pin) return null;
+  const a = Buffer.from(entered);
+  const b = Buffer.from(pin);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
