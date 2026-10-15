@@ -242,7 +242,7 @@ describe("whats_left", () => {
 describe("read-back and submit", () => {
   it("refuses to submit before the read-back", async () => {
     const res = await run("submit_review");
-    expect(res.error).toMatch(/Read back the answers first/);
+    expect(res.error).toMatch(/Ask whether they'd like a read-back/);
     expect(store.submit).not.toHaveBeenCalled();
   });
 
@@ -272,7 +272,7 @@ describe("read-back and submit", () => {
     await run("get_readback");
     interview.noteReviewerTurn(); // "Actually, make 1 two quarters."
     await run("record_answer", { number: 1, text: "Two quarters." });
-    expect((await run("submit_review")).error).toMatch(/Read back the answers first/);
+    expect((await run("submit_review")).error).toMatch(/Ask whether they'd like a read-back/);
 
     await run("get_readback");
     interview.noteReviewerTurn(); // "Yes, that's right."
@@ -336,3 +336,60 @@ describe("showQuestion", () => {
     ]);
   });
 });
+
+describe("optional read-back", () => {
+  async function coverAll() {
+    await run("record_answer", { number: 1, text: "A quarter." });
+    await run("record_answer", { number: 2, options: [3] });
+    await run("record_answer", { number: 3, options: [1] });
+    return run("next_question");
+  }
+
+  it("the wrap-up asks whether they want a read-back", async () => {
+    const done = await coverAll();
+    expect(done.done).toBe(true);
+    expect(String(done.message)).toMatch(/whether they'd like a quick read-back/);
+  });
+
+  it("submits without a read-back once the reviewer answers the offer", async () => {
+    await coverAll();
+    interview.noteReviewerTurn(); // "No, just submit."
+    const res = await run("submit_review", { readback_declined: true });
+    expect(res.ok).toBe(true);
+    expect(store.submit).toHaveBeenCalledTimes(1);
+    expect(store.endCall).toHaveBeenCalledWith("submitted");
+  });
+
+  it("refuses readback_declined before the reviewer has answered the offer", async () => {
+    await coverAll();
+    const res = await run("submit_review", { readback_declined: true });
+    expect(res.error).toMatch(/Ask whether they'd like a read-back first/);
+    expect(store.submit).not.toHaveBeenCalled();
+  });
+
+  it("refuses readback_declined before every question is covered", async () => {
+    await run("record_answer", { number: 1, text: "A quarter." });
+    interview.noteReviewerTurn();
+    const res = await run("submit_review", { readback_declined: true });
+    expect(res.error).toMatch(/Not every question is covered yet/);
+  });
+
+  it("a change after the wrap-up means asking again", async () => {
+    await coverAll();
+    interview.noteReviewerTurn(); // "Actually, change 1."
+    await run("record_answer", { number: 1, text: "Two quarters." });
+    interview.noteReviewerTurn();
+    expect((await run("submit_review", { readback_declined: true })).error).toMatch(/Not every question is covered yet/);
+
+    await run("next_question"); // wrap-up again
+    interview.noteReviewerTurn(); // "No read-back."
+    expect((await run("submit_review", { readback_declined: true })).ok).toBe(true);
+  });
+
+  it("a plain submit with neither a read-back nor a decline is refused", async () => {
+    await coverAll();
+    interview.noteReviewerTurn();
+    expect((await run("submit_review")).error).toMatch(/Ask whether they'd like a read-back/);
+  });
+});
+

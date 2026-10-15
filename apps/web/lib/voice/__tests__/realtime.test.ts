@@ -45,8 +45,10 @@ describe("buildInstructions", () => {
     expect(text).toMatch(/never describe or summarize them/);
   });
 
-  it("requires the read-back before submit", () => {
-    expect(text).toMatch(/Never call submit_review before the reviewer has heard the read-back/);
+  it("offers the read-back instead of always giving it, and never submits without the reviewer's say-so", () => {
+    expect(text).toMatch(/ask whether they'd like a quick read-back/);
+    expect(text).toMatch(/readback_declined true/);
+    expect(text).toMatch(/Never submit without the reviewer's say-so/);
   });
 });
 

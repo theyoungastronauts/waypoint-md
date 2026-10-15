@@ -148,8 +148,17 @@ export const VOICE_TOOLS: RealtimeFunctionTool[] = [
     type: "function",
     name: "submit_review",
     description:
-      "Submit the review. Only after the read-back, once the reviewer has confirmed it is right.",
-    parameters: { type: "object", properties: {}, additionalProperties: false },
+      "Submit the review. Either after the read-back, once the reviewer has confirmed it is right, or with readback_declined true when the reviewer said they don't want a read-back.",
+    parameters: {
+      type: "object",
+      properties: {
+        readback_declined: {
+          type: "boolean",
+          description: "True when the reviewer was asked and said they don't want a read-back.",
+        },
+      },
+      additionalProperties: false,
+    },
   },
   {
     type: "function",

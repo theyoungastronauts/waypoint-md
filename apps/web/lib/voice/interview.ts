@@ -55,6 +55,13 @@ export class Interview {
    * corrected answers must be read back again before submitting.
    */
   private readbackAtTurn: number | null = null;
+  /**
+   * The read-back is optional (Tyler, 2026-10-15): once every question is
+   * covered the reviewer is asked whether they want one. Submitting without it
+   * needs their answer to that question — a reviewer turn after the wrap-up —
+   * and, like a read-back, is voided by any later write.
+   */
+  private wrapUpAtTurn: number | null = null;
   private reviewerTurns = 0;
   private submitting: Promise<void> | null = null;
   private submitted = false;
@@ -109,7 +116,7 @@ export class Interview {
       case "get_readback":
         return this.readback();
       case "submit_review":
-        return this.submit();
+        return this.submit(args);
       case "end_call":
         this.store.endCall("stopped");
         return { ok: true, message: "Say a short goodbye. The answers so far are saved as a draft." };
@@ -134,11 +141,12 @@ export class Interview {
     // still covers them and go_to_question reaches them.
     const next = this.brief.questions.find((q) => !this.covered.has(q.number) && !this.answeredBefore.has(q.itemId));
     if (!next) {
+      this.wrapUpAtTurn = this.reviewerTurns;
       return {
         done: true,
         flagged: this.numbersWithStatus("flagged"),
         message:
-          "Every question has been covered. Offer to revisit any flagged ones, then call get_readback and read it back.",
+          "Every question has been covered. Offer to revisit any flagged ones. Then ask whether they'd like a quick read-back before you submit. If yes, call get_readback, read it and get their confirmation. If no, call submit_review with readback_declined true.",
       };
     }
     return this.present(next);
@@ -294,12 +302,24 @@ export class Interview {
     };
   }
 
-  private async submit(): Promise<ToolResult> {
+  private async submit(args: Args): Promise<ToolResult> {
     if (this.submitted) return { ok: true, message: "Already submitted. Say goodbye." };
-    if (this.readbackAtTurn === null) {
-      return { error: "Read back the answers first: call get_readback, read it, and get the reviewer's confirmation." };
-    }
-    if (this.reviewerTurns <= this.readbackAtTurn) {
+    if (args.readback_declined === true) {
+      if (this.wrapUpAtTurn === null) {
+        return {
+          error:
+            "Not every question is covered yet, or an answer changed since. Call next_question, then ask whether they want a read-back before submitting.",
+        };
+      }
+      if (this.reviewerTurns <= this.wrapUpAtTurn) {
+        return { error: "Ask whether they'd like a read-back first, and wait for their answer." };
+      }
+    } else if (this.readbackAtTurn === null) {
+      return {
+        error:
+          "Ask whether they'd like a read-back. If yes, call get_readback, read it and get their confirmation; if no, call submit_review with readback_declined true.",
+      };
+    } else if (this.reviewerTurns <= this.readbackAtTurn) {
       return { error: "Read the answers back to the reviewer and wait for them to confirm before submitting." };
     }
     this.submitting = this.store.submit();
@@ -320,6 +340,7 @@ export class Interview {
   /** Every write goes through here: it voids an earlier read-back. */
   private write(itemId: string, draft: InterviewDraft): void {
     this.readbackAtTurn = null;
+    this.wrapUpAtTurn = null;
     this.store.writeDraft(itemId, draft);
   }
 

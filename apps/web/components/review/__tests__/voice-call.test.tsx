@@ -216,7 +216,7 @@ describe("VoiceCall", () => {
     // Submit before the read-back is refused and nothing is marked completed.
     emit(toolCall("submit_review", {}, "c4"));
     await waitFor(() =>
-      expect(peer.channel.sent.some((e) => JSON.stringify(e).includes("Read back the answers first"))).toBe(true),
+      expect(peer.channel.sent.some((e) => JSON.stringify(e).includes("Ask whether they'd like a read-back"))).toBe(true),
     );
     expect(calls((u) => u === `/api/documents/${DOC_ID}`)).toHaveLength(0);
 
