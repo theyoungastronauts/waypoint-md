@@ -34,6 +34,7 @@ export function ReviewView({
   aiEnabled,
   voiceEnabled = false,
   voiceSessions = [],
+  phonePin = null,
   initialChat,
 }: {
   docId: string;
@@ -47,6 +48,8 @@ export function ReviewView({
   voiceEnabled?: boolean;
   /** Past voice calls on this document, newest first, with transcripts. */
   voiceSessions?: VoiceSessionRow[];
+  /** This review's phone PIN, when calling in is set up and the review is live. */
+  phonePin?: string | null;
   /** The persisted chat thread for this document (empty when AI is off). */
   initialChat: AgentMessage[];
 }) {
@@ -104,7 +107,7 @@ export function ReviewView({
 
           {voiceEnabled && allInits.length > 0 && (
             <div className="mt-4">
-              <VoiceCall docId={docId} onSubmitted={onCompleted} />
+              <VoiceCall docId={docId} phonePin={phonePin} onSubmitted={onCompleted} />
             </div>
           )}
 

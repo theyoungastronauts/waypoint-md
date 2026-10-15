@@ -43,6 +43,13 @@
       "when": 1791601748470,
       "tag": "0005_calm_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792064530720,
+      "tag": "0006_amazing_the_hood",
+      "breakpoints": true
     }
   ]
 }

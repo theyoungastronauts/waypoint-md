@@ -12,7 +12,8 @@ import { listChatMessages } from "@/lib/chat";
 import { getDocumentDetail } from "@/lib/documents";
 import { relativeTime, sourceLabel, statusMeta } from "@/lib/format";
 import { buildSyntheticInits, renderReviewDocument } from "@/lib/render/review";
-import { voiceEnabled } from "@/lib/voice/config";
+import { phoneEnabled, voiceEnabled } from "@/lib/voice/config";
+import { ensurePhonePin } from "@/lib/voice/phone-pins";
 import { listVoiceSessions } from "@/lib/voice/sessions";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +91,7 @@ export default async function DocumentPage({ params }: DocPageProps) {
         syntheticInits={syntheticInits}
         aiEnabled={ai}
         voiceEnabled={voiceEnabled()}
+        phonePin={phoneEnabled() ? ensurePhonePin(doc.id) : null}
         voiceSessions={listVoiceSessions(doc.id)}
         initialChat={initialChat}
         comments={doc.comments.map((c) => ({

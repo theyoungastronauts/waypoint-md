@@ -22,7 +22,9 @@ export const projects = sqliteTable("projects", {
   createdAt: createdAt(),
 });
 
-export const documents = sqliteTable("documents", {
+export const documents = sqliteTable(
+  "documents",
+  {
   id: id(),
   projectId: text("project_id").references(() => projects.id),
   title: text("title"),
@@ -42,11 +44,19 @@ export const documents = sqliteTable("documents", {
    */
   status: text("status").notNull().default("pending"),
   supersedesId: text("supersedes_id"),
+  /**
+   * Waypoint Voice: the 4-digit PIN that opens this review over the phone.
+   * Only live reviews (pending / in_review) answer to it; a finished review's
+   * PIN can be handed to a new one, which clears it here (`lib/voice/phone-pins.ts`).
+   */
+  phonePin: text("phone_pin"),
   createdAt: createdAt(),
   updatedAt: text("updated_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
-});
+  },
+  (table) => [uniqueIndex("documents_phone_pin_idx").on(table.phonePin)],
+);
 
 export const items = sqliteTable("items", {
   id: id(),

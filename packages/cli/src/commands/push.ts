@@ -39,6 +39,7 @@ function announce(io: IO, config: ResolvedConfig, result: PushResult, sourcePath
   });
   io.log(`Pushed ${sourcePath}`);
   io.log(`  review: ${reviewUrl}`);
+  if (typeof result.phonePin === "string") io.log(`  phone PIN: ${result.phonePin}`);
   if (Array.isArray(result.warnings) && result.warnings.length > 0) {
     io.warn(`  parsed with ${result.warnings.length} warning(s) — open the review to see them.`);
   }

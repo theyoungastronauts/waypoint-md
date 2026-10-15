@@ -21,3 +21,40 @@ export function getOpenAiKey(): string | null {
 export function voiceEnabled(): boolean {
   return aiEnabled() && getOpenAiKey() !== null;
 }
+
+/** The trimmed `OPENAI_WEBHOOK_SECRET` (signs incoming-call webhooks), or null. */
+export function getWebhookSecret(): string | null {
+  const raw = process.env.OPENAI_WEBHOOK_SECRET;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * The caller numbers allowed to reach Waypoint by phone (decision Q5), from
+ * `WAYPOINT_PHONE_ALLOWLIST`: comma-separated E.164 numbers. Spaces, dashes and
+ * brackets are ignored, so `+1 (604) 555-0100` and `+16045550100` match.
+ */
+export function getPhoneAllowlist(): string[] {
+  const raw = process.env.WAYPOINT_PHONE_ALLOWLIST ?? "";
+  return raw
+    .split(",")
+    .map((n) => normalizePhoneNumber(n))
+    .filter((n): n is string => n !== null);
+}
+
+/** Reduce a number to `+` and digits; null when nothing number-like is left. */
+export function normalizePhoneNumber(input: string): string | null {
+  const digits = input.replace(/[^\d+]/g, "");
+  if (!/^\+?\d{7,15}$/.test(digits)) return null;
+  return digits.startsWith("+") ? digits : `+${digits}`;
+}
+
+/**
+ * Whether calling in by phone is available: voice itself, the webhook signing
+ * secret, and at least one allowlisted number. Without all three, the webhook
+ * rejects every call and no PIN is shown.
+ */
+export function phoneEnabled(): boolean {
+  return voiceEnabled() && getWebhookSecret() !== null && getPhoneAllowlist().length > 0;
+}

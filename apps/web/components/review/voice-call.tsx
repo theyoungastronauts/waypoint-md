@@ -71,7 +71,16 @@ function MicIcon({ className }: { className?: string }) {
   );
 }
 
-export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: () => void }) {
+export function VoiceCall({
+  docId,
+  phonePin = null,
+  onSubmitted,
+}: {
+  docId: string;
+  /** Shown beside Talk so the review can be opened by phone (decision Q6). */
+  phonePin?: string | null;
+  onSubmitted: () => void;
+}) {
   const responses = useResponses();
   const { focus } = useFocus();
   const router = useRouter();
@@ -242,7 +251,16 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
     await call.start({ clientSecret: session.clientSecret, callsUrl: session.callsUrl });
   }, [docId, focus, responses, router]);
 
-  if (!supported) return null;
+  const pinBadge = phonePin ? (
+    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+      Phone PIN <span className="font-mono text-sm font-medium tracking-widest text-foreground">{phonePin}</span>
+    </span>
+  ) : null;
+
+  if (!supported) {
+    // No in-browser call here, but the review can still be opened by phone.
+    return pinBadge ? <div className="flex rounded-lg border border-border bg-card px-4 py-3">{pinBadge}</div> : null;
+  }
 
   const busy = phase === "preparing" || phase === "connecting" || phase === "live";
 
@@ -296,6 +314,7 @@ export function VoiceCall({ docId, onSubmitted }: { docId: string; onSubmitted: 
             <span className={phase === "error" ? "text-destructive" : "text-muted-foreground"}>{message}</span>
           )}
         </div>
+        {pinBadge}
       </div>
 
       {phase === "live" && (caption || lastHeard) && (

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { setupTestDb } from "@/test/db";
 
@@ -222,5 +222,34 @@ describe("supersede semantics (§6)", () => {
     // raw_md is never mutated by supersede.
     expect(oldDoc.rawMd).toBe("# V1\n\nfirst");
     expect(newDoc.rawMd).toBe("# V2\n\nsecond");
+  });
+});
+
+describe("POST /api/documents — phone PIN (Waypoint Voice)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  const enablePhone = () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubEnv("OPENAI_WEBHOOK_SECRET", "whsec_abc");
+    vi.stubEnv("WAYPOINT_PHONE_ALLOWLIST", "+16045550100");
+  };
+
+  it("reports the review's phone PIN once calling in is set up", async () => {
+    enablePhone();
+    const body = await (await postDocument(jsonRequest({ markdown: kitchenSink }))).json();
+    expect(body.phonePin).toMatch(/^[1-9]\d{3}$/);
+  });
+
+  it("omits the PIN while calling in is not set up (it is still assigned)", async () => {
+    vi.stubEnv("OPENAI_WEBHOOK_SECRET", "");
+    const body = await (await postDocument(jsonRequest({ markdown: kitchenSink }))).json();
+    expect(body.phonePin).toBeUndefined();
+  });
+
+  it("gives no PIN to a document without questions", async () => {
+    enablePhone();
+    const body = await (await postDocument(jsonRequest({ markdown: "# Notes\n\nNo questions.\n" }))).json();
+    expect(body.phonePin).toBeUndefined();
   });
 });

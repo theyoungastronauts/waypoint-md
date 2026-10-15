@@ -43,6 +43,8 @@ export interface PushResult {
   url: string;
   title: string | null;
   warnings: unknown[];
+  /** Waypoint Voice: the review's phone PIN, present once calling in is set up. */
+  phonePin?: string;
 }
 
 export interface DocumentSummary {

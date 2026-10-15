@@ -5,6 +5,8 @@ import { listDocuments } from "@/lib/documents";
 import { MAX_DOC_BYTES, hasAllowedExtension } from "@/lib/ingest/constants";
 import { readPathDoor } from "@/lib/ingest/path-door";
 import { ingestDocument, type IngestResult } from "@/lib/ingest/service";
+import { phoneEnabled } from "@/lib/voice/config";
+import { ensurePhonePin } from "@/lib/voice/phone-pins";
 import { fetchUrlDoor } from "@/lib/ingest/url-door";
 import { resolveProjectId } from "@/lib/projects";
 
@@ -33,8 +35,17 @@ const pathSchema = z.object({ path: z.string().min(1), ...commonFields });
 const urlSchema = z.object({ url: z.string().min(1), ...commonFields });
 
 function ingestResponse(result: IngestResult): NextResponse {
+  // Waypoint Voice (Q7): a review with questions gets its phone PIN at push.
+  // It is only reported once calling in is set up, so it never names a dead end.
+  const pin = ensurePhonePin(result.id);
   return NextResponse.json(
-    { id: result.id, url: result.url, title: result.title, warnings: result.warnings },
+    {
+      id: result.id,
+      url: result.url,
+      title: result.title,
+      warnings: result.warnings,
+      ...(pin && phoneEnabled() ? { phonePin: pin } : {}),
+    },
     { status: 201 },
   );
 }

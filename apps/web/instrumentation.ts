@@ -14,6 +14,11 @@ export async function register() {
     const { runMigrations } = await import("./lib/db/migrate");
     runMigrations();
 
+    // Waypoint Voice: live reviews pushed before phone PINs existed get one now.
+    const { backfillPhonePins } = await import("./lib/voice/phone-pins");
+    const assigned = backfillPhonePins();
+    if (assigned > 0) console.info(`[voice] assigned phone PINs to ${assigned} live review(s)`);
+
     const { authEnabled } = await import("./lib/auth");
     if (!authEnabled()) {
       warnAuthOpen();

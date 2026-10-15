@@ -49,6 +49,28 @@ afterEach(() => {
 });
 
 describe("waypoint push", () => {
+  it("prints the phone PIN when the server reports one", async () => {
+    stubFetch((call) => {
+      if (call.url.endsWith("/api/health")) return healthOk();
+      if (call.url.endsWith("/api/documents") && call.method === "POST") {
+        return jsonResponse({ id: "doc123", url: "/d/doc123", title: "Plan", warnings: [], phonePin: "4821" }, 201);
+      }
+      throw new Error(`unexpected ${call.method} ${call.url}`);
+    });
+    await runPush(planPath, {}, { config: config(), io: io.io });
+    expect(io.text()).toContain("phone PIN: 4821");
+  });
+
+  it("prints no phone PIN line when the server reports none", async () => {
+    stubFetch((call) => {
+      if (call.url.endsWith("/api/health")) return healthOk();
+      if (call.url.endsWith("/api/documents") && call.method === "POST") return pushOk();
+      throw new Error(`unexpected ${call.method} ${call.url}`);
+    });
+    await runPush(planPath, {}, { config: config(), io: io.io });
+    expect(io.text()).not.toContain("phone PIN");
+  });
+
   it("posts the doc, writes the pointer, and prints the public review URL", async () => {
     const calls = stubFetch((call) => {
       if (call.url.endsWith("/api/health")) return healthOk();
