@@ -111,4 +111,24 @@ describe("POST /api/voice/phone/webhook", () => {
     const res = await POST(signed(incoming("sip:+16045550100@x")));
     expect(res.status).toBe(404);
   });
+
+  it("never logs the caller's number", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const req = signed({
+      type: "realtime.call.incoming",
+      data: {
+        call_id: "rtc_log",
+        sip_headers: [
+          { name: "From", value: "sip:+16045550100@x" },
+          { name: "P-Asserted-Identity", value: "<sip:+16045550100@x>;verstat=TN-Validation-Passed" },
+          { name: "X-Twilio-VerStat", value: "TN-Validation-Passed-A" },
+        ],
+      },
+    });
+    await POST(req);
+    const logged = info.mock.calls.flat().join(" ");
+    expect(logged).toContain("verstat=TN-Validation-Passed-A");
+    expect(logged).not.toContain("6045550100");
+    info.mockRestore();
+  });
 });

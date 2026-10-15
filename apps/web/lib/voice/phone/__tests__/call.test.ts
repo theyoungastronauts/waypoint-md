@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VoiceBrief } from "@/lib/voice/brief";
 import type { InterviewDraft, InterviewStore } from "@/lib/voice/interview";
 import {
+  HARD_STOP_MS,
   MAX_PIN_MISSES,
   PhoneCall,
   estimateSpeechMs,
@@ -100,16 +101,23 @@ function setup(opts: { openFails?: boolean } = {}) {
     log: () => {},
   };
   const call = new PhoneCall(deps);
-  /** Complete the response in flight (spoken, no tool calls). */
+  let responseN = 0;
+  /** A response as OpenAI sends it: created, its transcript, done (spoken, no tool calls). */
   const finishResponse = (transcript = "ok") => {
-    socket.emit({ type: "response.output_audio_transcript.done", transcript });
-    socket.emit({ type: "response.done", response: { status: "completed", output: [{ type: "message" }] } });
+    const id = `resp_${++responseN}`;
+    socket.emit({ type: "response.created", response: { id } });
+    socket.emit({ type: "response.output_audio_transcript.done", response_id: id, transcript });
+    socket.emit({ type: "response.done", response: { id, status: "completed", output: [{ type: "message" }] } });
+    return id;
   };
-  const toolCall = (name: string, args: unknown, id: string) =>
+  const toolCall = (name: string, args: unknown, callId: string) => {
+    const id = `resp_${++responseN}`;
+    socket.emit({ type: "response.created", response: { id } });
     socket.emit({
       type: "response.done",
-      response: { status: "completed", output: [{ type: "function_call", name, call_id: id, arguments: JSON.stringify(args) }] },
+      response: { id, status: "completed", output: [{ type: "function_call", name, call_id: callId, arguments: JSON.stringify(args) }] },
     });
+  };
   const responses = () => socket.sent.filter((e) => e.type === "response.create");
   return { call, socket, deps, store, drafts, recorded, closed, timers, finishResponse, toolCall, responses };
 }
@@ -175,8 +183,9 @@ describe("PhoneCall — lobby", () => {
     }
     expect(JSON.stringify(t.responses().at(-1))).toContain("Goodbye");
     t.finishResponse("That PIN didn't match either. Goodbye.");
-    expect(t.timers).toHaveLength(1);
-    t.timers[0].fn();
+    const goodbye = t.timers.filter((x) => x.ms !== HARD_STOP_MS);
+    expect(goodbye).toHaveLength(1);
+    goodbye[0].fn();
     expect(t.deps.hangup).toHaveBeenCalled();
     expect(t.socket.closed).toBe(true);
     expect(t.deps.openReview).not.toHaveBeenCalled();
@@ -295,6 +304,103 @@ describe("PhoneCall — failures", () => {
     t.finishResponse("Sorry… Goodbye.");
     t.timers.at(-1)!.fn();
     expect(t.deps.hangup).toHaveBeenCalled();
+  });
+
+  it("frees the reply slot when OpenAI refuses a response.create, so the call can't go silent", async () => {
+    const t = setup();
+    t.socket.fire("open"); // greeting requested, not yet created
+    t.socket.emit({ type: "error", error: { code: "invalid_value", message: "bad" } });
+    t.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: "0" });
+    await flush();
+    expect(JSON.stringify(t.responses().at(-1))).toContain("Your latest review is Offsite plan");
+  });
+
+  it("re-sends a response refused because another one was active, once that one ends", async () => {
+    const t = setup();
+    t.socket.fire("open");
+    t.socket.emit({ type: "error", error: { code: "conversation_already_has_active_response", message: "busy" } });
+    expect(t.responses()).toHaveLength(1);
+    t.finishResponse("an automatic reply");
+    expect(t.responses()).toHaveLength(2);
+    expect(JSON.stringify(t.responses()[1])).toContain(LOBBY_GREETING);
+  });
+
+  it("hangs up after a hard stop even if the model never says a tool-free goodbye", async () => {
+    const t = setup();
+    t.socket.fire("open");
+    t.finishResponse();
+    for (let i = 0; i < MAX_PIN_MISSES; i++) {
+      t.toolCall("open_review", { pin: "1111" }, `m${i}`);
+      await flush();
+    }
+    const hard = t.timers.find((x) => x.ms === HARD_STOP_MS);
+    expect(hard).toBeDefined();
+    hard!.fn();
+    expect(t.deps.hangup).toHaveBeenCalled();
+    expect(t.socket.closed).toBe(true);
+  });
+});
+
+describe("PhoneCall — review fixes", () => {
+  it("locks the lobby after a third spoken miss: no keypad PIN or tool can open a review", async () => {
+    const t = setup();
+    t.socket.fire("open");
+    t.finishResponse();
+    for (let i = 0; i < MAX_PIN_MISSES; i++) {
+      t.toolCall("open_review", { pin: "1111" }, `m${i}`);
+      await flush();
+      t.finishResponse("Try again.");
+    }
+    for (const d of "4821") t.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: d });
+    t.toolCall("open_review", { pin: "4821" }, "late");
+    await flush();
+    expect(t.deps.openReview).not.toHaveBeenCalled();
+    const last = t.socket.sent.filter((e) => e.type === "conversation.item.create").at(-1) as { item: { output: string } };
+    expect(JSON.parse(last.item.output).error).toMatch(/No more tries/);
+  });
+
+  it("times the hang-up from the goodbye itself, not a reply still playing before it", async () => {
+    const u = setup();
+    (u.deps.findLatest as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    u.socket.fire("open");
+    u.socket.emit({ type: "response.created", response: { id: "greet" } }); // greeting playing
+    u.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: "0" });
+    await flush();
+    // The greeting finishes and its audio stops: neither may start the hang-up.
+    u.socket.emit({ type: "response.output_audio_transcript.done", response_id: "greet", transcript: LOBBY_GREETING });
+    u.socket.emit({ type: "response.done", response: { id: "greet", status: "completed", output: [] } });
+    u.socket.emit({ type: "output_audio_buffer.stopped", response_id: "greet" });
+    expect(u.timers.filter((x) => x.ms !== HARD_STOP_MS)).toHaveLength(0);
+    expect(JSON.stringify(u.responses().at(-1))).toContain("no open review");
+
+    // The goodbye itself arms the hang-up, and its playback ending shortens the wait.
+    const id = u.finishResponse("There's no open review right now. Goodbye.");
+    expect(u.timers.filter((x) => x.ms !== HARD_STOP_MS).at(-1)!.ms).toBe(
+      estimateSpeechMs("There's no open review right now. Goodbye."),
+    );
+    u.socket.emit({ type: "output_audio_buffer.stopped", response_id: id });
+    expect(u.timers.filter((x) => x.ms !== HARD_STOP_MS).at(-1)!.ms).toBe(600);
+  });
+
+  it("keeps the lobby transcript when the caller hangs up while the review is opening", async () => {
+    let release!: () => void;
+    const t = setup();
+    const opened = t.deps.openReview as ReturnType<typeof vi.fn>;
+    const real = opened.getMockImplementation()!;
+    opened.mockImplementation(async (id: string) => {
+      await new Promise<void>((r) => (release = r));
+      return real(id);
+    });
+    t.socket.fire("open");
+    t.finishResponse("greeting");
+    for (const d of "4821") t.socket.emit({ type: "input_audio_buffer.dtmf_event_received", event: d });
+    await flush();
+    t.socket.fire("close");
+    release();
+    await flush();
+    await flush();
+    expect(t.recorded.map((e) => (e.role === "tool" ? e.name : e.text))).toContain("greeting");
+    expect(t.closed).toEqual(["ended"]);
   });
 
   it("ignores cancelled responses and unfinished calls", async () => {

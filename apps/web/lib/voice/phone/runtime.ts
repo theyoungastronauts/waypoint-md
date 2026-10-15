@@ -5,7 +5,7 @@ import { buildSyntheticInits, renderReviewDocument } from "@/lib/render/review";
 import { upsertResponse } from "@/lib/responses";
 import type { InterviewStore } from "../interview";
 import { getOrCreateBrief } from "../make-brief";
-import { findLatestLiveDocument, findLiveDocumentByPin } from "../phone-pins";
+import { findLatestLiveDocument, findLiveDocumentByPin, LIVE_STATUSES } from "../phone-pins";
 import { REALTIME_MODEL } from "../realtime";
 import { createVoiceSession, updateVoiceSession } from "../sessions";
 import { PhoneCall, type OpenedReview } from "./call";
@@ -51,7 +51,13 @@ export function rejectCall(apiKey: string, callId: string): Promise<void> {
  */
 export async function answerCall(apiKey: string, callId: string): Promise<void> {
   if (activeCalls.has(callId)) return;
-  await control(apiKey, callId, "accept", lobbySessionConfig());
+  try {
+    await control(apiKey, callId, "accept", lobbySessionConfig());
+  } catch (err) {
+    // Don't leave the caller ringing until it times out.
+    await rejectCall(apiKey, callId).catch(() => {});
+    throw err;
+  }
 
   const socket = new WebSocket(`${SIDEBAND_URL}?call_id=${encodeURIComponent(callId)}`, {
     headers: { authorization: `Bearer ${apiKey}` },
@@ -79,6 +85,10 @@ export async function answerCall(apiKey: string, callId: string): Promise<void> 
 export async function openPhoneReview(documentId: string): Promise<OpenedReview> {
   const detail = getDocumentDetail(documentId);
   if (!detail) throw new Error(`document ${documentId} not found`);
+  // Re-checked here: the review may have been finished since the caller picked it.
+  if (!(LIVE_STATUSES as readonly string[]).includes(detail.status)) {
+    throw new Error(`document ${documentId} is ${detail.status}, not open for review`);
+  }
   const { brief } = await getOrCreateBrief(detail);
 
   // The same drafts the review page starts from: persisted answer, else the

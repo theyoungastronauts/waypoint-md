@@ -54,10 +54,13 @@ export async function POST(req: Request): Promise<NextResponse> {
   const headers = event.data?.sip_headers as Parameters<typeof sipHeader>[0];
   const caller = callerNumber(sipHeader(headers, "From"));
   const allowed = caller !== null && getPhoneAllowlist().includes(caller);
-  // Carrier verification headers, logged on every call so Q5's check can be tightened once seen.
-  const verstat =
-    sipHeader(headers, "X-Twilio-VerStat") ?? sipHeader(headers, "P-Asserted-Identity") ?? "(none)";
-  console.info(`[phone] incoming ${callId} from ${allowed ? "an allowlisted number" : "an unknown number"} verstat=${verstat}`);
+  // Carrier caller-ID verification, logged on every call so Q5's check can be
+  // tightened once real values are seen. Never the caller's number itself.
+  const verstat = sipHeader(headers, "X-Twilio-VerStat") ?? "(none)";
+  const pai = sipHeader(headers, "P-Asserted-Identity") ? "present" : "absent";
+  console.info(
+    `[phone] incoming ${callId} from ${allowed ? "an allowlisted number" : "an unknown number"} verstat=${verstat} p-asserted-identity=${pai}`,
+  );
 
   after(async () => {
     try {

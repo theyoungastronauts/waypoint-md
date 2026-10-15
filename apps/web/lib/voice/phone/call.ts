@@ -64,6 +64,8 @@ const GOODBYE_TAIL_MS = 600;
 /** …or, if playback never reports stopping, after an estimate of the goodbye's length. */
 const MIN_GOODBYE_MS = 3_000;
 const MAX_GOODBYE_MS = 20_000;
+/** Once a call is ending, hang up after this long no matter what the model does. */
+export const HARD_STOP_MS = 30_000;
 
 type Phase = "lobby" | "opening" | "interview" | "ending" | "ended";
 
@@ -90,12 +92,26 @@ export class PhoneCall {
   private interview: Interview | null = null;
   /** Lobby transcript, kept until a review (and its call record) exists. */
   private pending: TranscriptEntry[] = [];
+  /** A response is in progress on OpenAI's side (ours or one voice detection started). */
   private responseActive = false;
+  /** The response we asked for and haven't seen created yet (re-sent if it was refused). */
+  private awaitingCreated: Record<string, unknown> | null = null;
   private queuedResponse: Record<string, unknown> | null = null;
   private pendingEnd: "submitted" | "stopped" | null = null;
-  private goodbyeArmed = false;
+  /**
+   * The goodbye is the first finished, tool-free response created after the call
+   * started ending — never an earlier one still playing. Responses are numbered
+   * as they are created to tell them apart.
+   */
+  private createdCount = 0;
+  private readonly responseSeq = new Map<string, number>();
+  private endFromSeq = Number.POSITIVE_INFINITY;
+  private goodbyeResponseId: string | null = null;
   private goodbyeTimer: unknown = null;
-  private lastVoiceText = "";
+  private hardStopTimer: unknown = null;
+  private readonly transcriptByResponse = new Map<string, string>();
+  /** Three wrong PINs: no more tries on this call. */
+  private locked = false;
   private readonly handledCalls = new Set<string>();
   private queue: Promise<void> = Promise.resolve();
 
@@ -144,28 +160,36 @@ export class PhoneCall {
       case "response.output_audio_transcript.done": {
         const text = typeof event.transcript === "string" ? event.transcript.trim() : "";
         if (text) {
-          this.lastVoiceText = text;
+          if (typeof event.response_id === "string") this.transcriptByResponse.set(event.response_id, text);
           this.addTranscript({ role: "voice", at: this.deps.now(), text });
         }
         break;
       }
-      case "response.created":
+      case "response.created": {
         this.responseActive = true;
+        this.awaitingCreated = null;
+        const id = (event.response as { id?: unknown } | undefined)?.id;
+        this.createdCount += 1;
+        if (typeof id === "string") this.responseSeq.set(id, this.createdCount);
         break;
+      }
       case "response.done":
         this.responseActive = false;
         // With tool calls, the reply to their results comes first; anything
         // queued goes out after that reply instead.
         if (!this.onResponseDone(event)) this.flushQueuedResponse();
         break;
-      case "output_audio_buffer.stopped":
-        if (this.goodbyeArmed) this.scheduleHangup(GOODBYE_TAIL_MS);
-        break;
-      case "error": {
-        const err = event.error as { message?: unknown } | undefined;
-        this.deps.log(`[phone] ${this.deps.callId} realtime error: ${typeof err?.message === "string" ? err.message : "unknown"}`);
+      case "output_audio_buffer.stopped": {
+        // Only the goodbye's own playback finishing shortens the wait.
+        const id = event.response_id;
+        if (this.goodbyeResponseId && (typeof id !== "string" || id === this.goodbyeResponseId)) {
+          this.scheduleHangup(GOODBYE_TAIL_MS);
+        }
         break;
       }
+      case "error":
+        this.onError(event);
+        break;
       default:
         break;
     }
@@ -173,18 +197,42 @@ export class PhoneCall {
 
   /** Handle a finished response; true when it carried tool calls to run. */
   private onResponseDone(event: RealtimeEvent): boolean {
-    const response = event.response as { status?: unknown; output?: unknown[] } | undefined;
+    const response = event.response as { id?: unknown; status?: unknown; output?: unknown[] } | undefined;
     if (response?.status === "cancelled") return false;
     const calls = (response?.output ?? []).filter(isFunctionCall);
     if (calls.length === 0) {
-      if (this.pendingEnd && !this.goodbyeArmed) {
-        this.goodbyeArmed = true;
-        this.scheduleHangup(estimateSpeechMs(this.lastVoiceText));
+      const id = typeof response?.id === "string" ? response.id : null;
+      const seq = id ? (this.responseSeq.get(id) ?? this.createdCount) : this.createdCount;
+      if (this.pendingEnd && !this.goodbyeResponseId && seq >= this.endFromSeq) {
+        this.goodbyeResponseId = id ?? "unknown";
+        this.scheduleHangup(estimateSpeechMs((id && this.transcriptByResponse.get(id)) || ""));
       }
       return false;
     }
     this.enqueue(() => this.runToolCalls(calls));
     return true;
+  }
+
+  /**
+   * A refused `response.create` must not silence the call. If another response
+   * was already running, ours goes out after it; otherwise the slot is freed.
+   */
+  private onError(event: RealtimeEvent): void {
+    const err = event.error as { message?: unknown; code?: unknown } | undefined;
+    this.deps.log(
+      `[phone] ${this.deps.callId} realtime error: ${typeof err?.code === "string" ? err.code + " " : ""}${typeof err?.message === "string" ? err.message : ""}`,
+    );
+    if (!this.awaitingCreated) return;
+    const refused = this.awaitingCreated;
+    this.awaitingCreated = null;
+    if (err?.code === "conversation_already_has_active_response") {
+      // Something else is speaking; its response.done flushes ours.
+      this.queuedResponse = this.queuedResponse ?? refused;
+      this.responseActive = true;
+    } else {
+      this.responseActive = false;
+      this.flushQueuedResponse();
+    }
   }
 
   private async runToolCalls(calls: FunctionCallItem[]): Promise<void> {
@@ -214,7 +262,7 @@ export class PhoneCall {
   // --- lobby ---------------------------------------------------------------
 
   private onDigit(digit: string): void {
-    if (this.phase !== "lobby") return;
+    if (this.phase !== "lobby" || this.locked) return;
     if (digit === "*") {
       this.digits = "";
       return;
@@ -255,6 +303,7 @@ export class PhoneCall {
     }
 
     if (name === "open_review") {
+      if (this.locked) return { error: "No more tries on this call. Say goodbye." };
       if (this.phase !== "lobby") return { error: "A review is already opening." };
       if (args.use_latest === true) {
         if (!this.latestOffered) return { error: "Call find_latest and confirm the title first." };
@@ -286,8 +335,9 @@ export class PhoneCall {
   private miss(viaKeypad: boolean): Record<string, unknown> {
     this.misses += 1;
     if (this.misses >= MAX_PIN_MISSES) {
-      this.pendingEnd = "stopped";
+      this.locked = true;
       if (viaKeypad) this.say("That PIN didn't match either. Goodbye.", "stopped");
+      else this.beginEnding("stopped");
       return { error: "No review has that PIN, and that was the last try. Say goodbye; the call will end." };
     }
     if (viaKeypad) this.say("I didn't find a review with that PIN. Try again.");
@@ -303,6 +353,9 @@ export class PhoneCall {
       .openReview(doc.id)
       .then((review) => {
         if (this.phase === "ended") {
+          // The caller hung up while the review was opening: keep what was said.
+          review.record(this.pending);
+          this.pending = [];
           review.close("ended");
           return;
         }
@@ -314,7 +367,7 @@ export class PhoneCall {
           ...review.store,
           endCall: (reason) => {
             review.store.endCall(reason);
-            this.pendingEnd = reason;
+            this.beginEnding(reason);
           },
         };
         this.interview = new Interview(review.brief, store, review.answeredBefore);
@@ -336,10 +389,25 @@ export class PhoneCall {
   /** Have the model say exactly this. With `end`, hang up once it has been said. */
   private say(text: string, end?: "stopped"): void {
     if (end) {
-      this.pendingEnd = end;
-      this.phase = this.phase === "ended" ? "ended" : "ending";
+      this.beginEnding(end);
+      if (this.phase === "lobby" || this.phase === "opening") this.phase = "ending";
     }
     this.requestResponse({ instructions: `Say exactly this, then stop: "${text.replace(/"/g, "'")}"`, tool_choice: "none" });
+  }
+
+  /**
+   * The call is ending: the next finished, tool-free response (created from
+   * now on) is the goodbye. A hard stop guarantees the hang-up even if the model
+   * keeps calling tools instead of saying goodbye.
+   */
+  private beginEnding(reason: "submitted" | "stopped"): void {
+    if (this.pendingEnd) return;
+    this.pendingEnd = reason;
+    this.endFromSeq = this.createdCount + 1;
+    this.hardStopTimer = this.deps.setTimeout(() => {
+      this.hangupQuietly();
+      this.finish("hard stop");
+    }, HARD_STOP_MS);
   }
 
   /** Send `response.create` now, or right after the response in progress finishes. */
@@ -349,6 +417,7 @@ export class PhoneCall {
       return;
     }
     this.responseActive = true;
+    this.awaitingCreated = response;
     this.send({ type: "response.create", ...(Object.keys(response).length > 0 ? { response } : {}) });
   }
 
@@ -398,6 +467,8 @@ export class PhoneCall {
     this.phase = "ended";
     if (this.goodbyeTimer) this.deps.clearTimeout(this.goodbyeTimer);
     this.goodbyeTimer = null;
+    if (this.hardStopTimer) this.deps.clearTimeout(this.hardStopTimer);
+    this.hardStopTimer = null;
     // A submit may still be settling when the caller hangs up: wait for it.
     void (this.interview?.settled() ?? Promise.resolve()).then(() => {
       this.review?.close(this.interview?.isSubmitted ? "submitted" : "ended");

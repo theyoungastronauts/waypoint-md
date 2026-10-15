@@ -8,7 +8,7 @@ vi.mock("@/lib/voice/make-brief", () => ({
 }));
 
 import { setupTestDb } from "@/test/db";
-import { getDocumentDetail } from "@/lib/documents";
+import { getDocumentDetail, updateDocument } from "@/lib/documents";
 import { ingestDocument } from "@/lib/ingest/service";
 import { upsertResponse } from "@/lib/responses";
 import { openPhoneReview } from "@/lib/voice/phone/runtime";
@@ -65,5 +65,12 @@ describe("openPhoneReview (server-side interview store)", () => {
     review.close("ended");
     const [session] = listVoiceSessions(id);
     expect(session).toMatchObject({ mode: "thorough", status: "ended", transcript: [{ role: "reviewer", text: "4821" }] });
+  });
+
+  it("refuses a review that was finished after the caller picked it", async () => {
+    const { id } = ingestDocument({ raw: kitchenSink, sourceType: "paste" });
+    updateDocument(id, { status: "completed" });
+    await expect(openPhoneReview(id)).rejects.toThrow(/not open for review/);
+    expect(listVoiceSessions(id)).toHaveLength(0);
   });
 });
