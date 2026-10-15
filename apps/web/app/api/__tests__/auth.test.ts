@@ -41,6 +41,14 @@ describe("auth middleware — enforced mode (token set)", () => {
     expect(allowed(middleware(req("/api/health")))).toBe(true);
   });
 
+  it("opens exactly the phone webhook path and nothing else under /api/voice", () => {
+    setToken(TOKEN);
+    expect(allowed(middleware(req("/api/voice/phone/webhook")))).toBe(true);
+    expect(allowed(middleware(req("/api/voice/phone/webhook/extra")))).toBe(false);
+    expect(allowed(middleware(req("/api/voice-sessions/abc")))).toBe(false);
+    expect(allowed(middleware(req("/api/documents/abc/voice/session")))).toBe(false);
+  });
+
   it("keeps the login route and login page open", () => {
     setToken(TOKEN);
     expect(allowed(middleware(req("/api/auth/login")))).toBe(true);

@@ -16,7 +16,14 @@ export const SESSION_COOKIE = "wp_session";
  * login exchange itself, and the login page a browser is redirected to. Every
  * other route is protected by default.
  */
-const OPEN_PATHS = new Set<string>(["/api/health", "/api/auth/login", "/login"]);
+const OPEN_PATHS = new Set<string>([
+  "/api/health",
+  "/api/auth/login",
+  "/login",
+  // Waypoint Voice: OpenAI's incoming-call webhook. Signature-verified in the
+  // route; an exact path, so nothing else under /api/voice opens with it.
+  "/api/voice/phone/webhook",
+]);
 
 /**
  * The public review surface (§ media spec Phase C, decision C-3): the only

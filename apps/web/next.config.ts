@@ -13,7 +13,8 @@ const nextConfig: NextConfig = {
   // @waypoint/spec is consumed straight from its TypeScript source.
   transpilePackages: ["@waypoint/spec"],
   // better-sqlite3 is a native module — keep it out of the bundle.
-  serverExternalPackages: ["better-sqlite3"],
+  // ws (Waypoint Voice phone sideband) is loaded from node_modules, not bundled.
+  serverExternalPackages: ["better-sqlite3", "ws"],
   // Lint is a separate standing gate (`pnpm lint`); don't re-run it during build.
   eslint: {
     ignoreDuringBuilds: true,
