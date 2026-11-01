@@ -1,6 +1,6 @@
 ---
 name: waypoint
-description: Author markdown for human review in Waypoint and run its push/pull review loop. Use when you produce a plan, summary, design, or set of decisions/questions that a human should review before you act — write it in the Waypoint SPEC (text + choice questions), push it with `waypoint push`, and at the start of a session pull any completed reviews and act on the annotations. Also use when the user mentions Waypoint, a review doc, `waypoint push`/`pull`, or a `.waypoint/pending.json` pointer.
+description: Author markdown for human review in Waypoint and run its push/pull review loop. Use when you produce a plan, summary, design, or set of decisions/questions that a human should review before you act — write it in the Waypoint SPEC (text + choice questions), push it with `waypoint push`, watch for the review in the background and act on it when it completes, and at the start of a session pull any completed reviews and act on the annotations. Also use when the user mentions Waypoint, a review doc, `waypoint push`/`pull`, or a `.waypoint/pending.json` pointer.
 allowed-tools: Bash(waypoint *), Bash(npx waypoint *)
 ---
 
@@ -30,8 +30,9 @@ earlier may now be reviewed:
 3. Read the pulled file and **act on it**: apply the reviewer's answers, checked
    options, and any `wp:suggestion` edits; address comments; treat `flagged`
    items as "needs discussion", `skipped` as "deliberately deferred".
-4. If it is not yet completed, tell the user it's still under review and move on —
-   never block waiting.
+4. If it is not yet completed, tell the user it's still under review, start a
+   background watch for it (see "Watch for the review" below), and move on.
+   Don't block the turn waiting, but do keep watching in the background.
 
 The digest is the cheapest thing to act on: it is `Q → A` pairs plus comments and
 their quoted anchors, so you can apply a review without re-reading the whole doc.
@@ -50,9 +51,40 @@ questions that a human should sign off on before you proceed:
    This prints a review URL and drops a `.waypoint/pending.json` pointer. If the
    server is down, the push is queued offline and does not fail — say so and
    continue.
-3. Tell the user where to review it (the printed URL; reviewable from a phone
-   over Tailscale), then continue with work that does not depend on the answers.
-   Pick the review back up next session via the pull loop above.
+3. Tell the user where to review it (relay the printed URL as-is; reviewable from a phone
+   over Tailscale), then start a
+   background watch for it (below) and continue with work that does not depend
+   on the answers. Don't wait for the user to say the review is in.
+
+### Watch for the review
+
+Right after a push, start a non-blocking watch that ends the moment the review
+completes. Run it as a background shell command that notifies you once on exit
+(in Claude Code, a Bash call with `run_in_background`), from the same directory
+you pushed from so `waypoint status` resolves the same project:
+
+```bash
+id=$(sed -n 's/.*"id"[^"]*"\([^"]*\)".*/\1/p' .waypoint/pending.json | cut -c1-8)
+for i in $(seq 1 1440); do
+  s=$(waypoint status 2>/dev/null | awk -v id="$id" '$1==id{print $2}')
+  case "$s" in
+    completed) echo "REVIEW COMPLETED $id"; exit 0;;
+    pulled) echo "ALREADY PULLED $id"; exit 0;;
+  esac
+  sleep 60
+done
+echo "WATCH TIMED OUT $id"; exit 1
+```
+
+`waypoint status` prints one row per document, `  <8-char id>  <status>  <title>`;
+the statuses are `pending`, `in_review`, `completed`, `pulled`. Read the id right
+after the push, because the next push overwrites the pointer. A queued offline
+push has no id yet, so there is nothing to watch until it is delivered.
+
+When the watch reports `REVIEW COMPLETED`, run `waypoint pull <id> --digest` and
+act on it straight away (step 3 of the pull loop), then tell the user what you
+did. `ALREADY PULLED` means another session took it, so check the review files
+before acting twice. On a timeout, fall back to the pull loop next session.
 
 Do not push trivial output. Push the things a human genuinely needs to weigh in
 on: irreversible choices, ambiguous requirements, architectural forks, anything
