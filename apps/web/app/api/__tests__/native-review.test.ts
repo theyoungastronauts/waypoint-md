@@ -37,6 +37,9 @@ describe("GET /api/documents/:id/review", () => {
     expect(r.segments.map((s) => s.kind)).toEqual(["prose", "question", "question", "question", "prose"]);
     expect(r.segments[0]).toMatchObject({ kind: "prose" });
     expect((r.segments[0] as { markdown: string }).markdown).toContain("Some intro prose describing the migration, with **bold**");
+    // The frontmatter is not prose: the web never renders it either.
+    expect((r.segments[0] as { markdown: string }).markdown).not.toContain("waypoint: 1");
+    expect((r.segments[0] as { markdown: string }).markdown.trimStart()).toMatch(/^# RDS Migration Plan/);
 
     const [q1, q2, q3] = questions(r);
     expect(q1).toMatchObject({ wpId: "q1", type: "text", select: null, saved: false });

@@ -92,13 +92,20 @@ function question(init: ReviewItemInit, rawMd: string | null): NativeQuestion {
   };
 }
 
+/** A leading YAML frontmatter block, which the web's pipeline (remark-frontmatter) never renders. */
+const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
+
 export function buildNativeReview(detail: DocumentDetail): NativeReview {
   const render = renderReviewDocument(detail.rawMd, detail.items);
-  const segments: NativeSegment[] = render.segments.map((segment) =>
-    segment.kind === "prose"
-      ? { kind: "prose", markdown: segment.source }
-      : { kind: "question", ...question(segment, detail.rawMd) },
-  );
+  const segments: NativeSegment[] = [];
+  for (const segment of render.segments) {
+    if (segment.kind !== "prose") {
+      segments.push({ kind: "question", ...question(segment, detail.rawMd) });
+      continue;
+    }
+    const markdown = segment.sourceStart === 0 ? segment.source.replace(FRONTMATTER, "") : segment.source;
+    if (markdown.trim().length > 0) segments.push({ kind: "prose", markdown });
+  }
   return {
     document: {
       id: detail.id,
